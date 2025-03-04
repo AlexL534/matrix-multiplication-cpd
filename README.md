@@ -1,9 +1,9 @@
 # CPD Projects
 
-CPD Projects of group T&lt;1&gt;&lt;2&gt;G&lt;1&gt;&lt;2&gt;.
+CPD Projects of group T12G12.
 
 Group members:
 
-1. &lt;Pedro&gt; &lt;Borges&gt; (&lt;up202207552@up.pt&gt;)
-2. &lt;Lucas&gt; &lt;Faria&gt; (&lt;up202207540@up.pt&gt;)
-3. &lt;Alexandre&gt; &lt;Lopes&gt; (&lt;up202207015@up.pt&gt;)
+1. Pedro Borges (up202207552@up.pt)
+2. Lucas Faria (up202207540@up.pt)
+3. Alexandre Lopes (up202207015@up.pt)
