@@ -36,6 +36,12 @@ void OnMult(int m_ar, int m_br) {
 	for(i = 0; i < m_br; i++)
 		for(j = 0; j < m_br; j++)
 			phb[i * m_br + j] = (double)(i+1);
+	
+	for(i = 0; i < m_ar; i++){
+		for(j=0; j < m_ar; j++){
+			phc[i * m_ar + j] = (double)0.0;
+		}
+	}
 
 
 
@@ -95,6 +101,12 @@ void OnMultLine(int m_ar, int m_br) {
 	for(i = 0; i < m_br; i++)
 		for(j = 0; j < m_br; j++)
 			phb[i * m_br + j] = (double)(i+1);
+	
+	for(i = 0; i < m_ar; i++){
+		for(j=0; j < m_ar; j++){
+			phc[i * m_ar + j] = (double)0.0;
+		}
+	}
 
     Time1 = clock();
 
@@ -109,7 +121,7 @@ void OnMultLine(int m_ar, int m_br) {
 
 
     Time2 = clock();
-	sprintf(st, "Time: %3.3f seconds\n", (double)(Time2 - Time1) / CLOCKS_PER_SEC);
+	std::cout << "Time: " << fixed << setprecision(3) << (double)(Time2 - Time1) / CLOCKS_PER_SEC << " seconds" << endl;
 	std::cout << st;
 
 	// display 10 elements of the result matrix to verify correctness
@@ -123,9 +135,7 @@ void OnMultLine(int m_ar, int m_br) {
     free(pha);
     free(phb);
     free(phc);
-	
-	 
-    
+	   
 }
 
 // add code here for block x block matrix multiplication
@@ -149,6 +159,12 @@ void OnMultBlock(int m_ar, int m_br, int bkSize) {
 	for(i = 0; i < m_br; i++)
 		for(j = 0; j < m_br; j++)
 			phb[i * m_br + j] = (double)(i+1);
+	
+	for(i = 0; i < m_ar; i++){
+		for(j=0; j < m_ar; j++){
+			phc[i * m_ar + j] = (double)0.0;
+		}
+	}
 
 	Time1 = clock();
 
@@ -207,7 +223,11 @@ void OnMultParallel1(int m_ar, int m_br) {
 		for(j = 0; j < m_br; j++)
 			phb[i * m_br + j] = (double)(i+1);
 
-
+	for(i = 0; i < m_ar; i++){
+		for(j=0; j < m_ar; j++){
+			phc[i * m_ar + j] = (double)0.0;
+		}
+	}
 
 
 	#pragma omp parallel shared(Time1,Time2, phc, pha,phb)
@@ -265,6 +285,12 @@ void OnMultParallel2(int m_ar, int m_br) {
 	for(i = 0; i < m_br; i++)
 		for(j = 0; j < m_br; j++)
 			phb[i * m_br + j] = (double)(i+1);
+	
+	for(i = 0; i < m_ar; i++){
+		for(j=0; j < m_ar; j++){
+			phc[i * m_ar + j] = (double)0.0;
+		}
+	}
 
 
 	#pragma omp parallel shared(Time1,Time2, phc, pha,phb) private(i,j,k)
@@ -323,10 +349,16 @@ void OnMultLineParallel1(int m_ar, int m_br){
 		for(j = 0; j < m_br; j++)
 			phb[i * m_br + j] = (double)(i+1);
 
+	for(i = 0; i < m_ar; i++){
+		for(j=0; j < m_ar; j++){
+			phc[i * m_ar + j] = (double)0.0;
+		}
+	}
+
 	#pragma omp parallel
 	{	
 		Time1 = omp_get_wtime();
-		#pragma omp for
+		#pragma omp for 
 		for(i = 0; i < m_ar; i++) {
 			for(j = 0; j < m_br; j++) {
 				for(k = 0; k < m_ar; k++) {
@@ -381,8 +413,15 @@ void OnMultLineParallel2(int m_ar, int m_br){
 	for(i = 0; i < m_br; i++)
 		for(j = 0; j < m_br; j++)
 			phb[i * m_br + j] = (double)(i+1);
+	
 
-	#pragma omp parallel 
+	for(i = 0; i < m_ar; i++){
+		for(j=0; j < m_ar; j++){
+			phc[i * m_ar + j] = (double)0.0;
+		}
+	}
+
+	#pragma omp parallel
 	{	
 		Time1 = omp_get_wtime();
 		for(i = 0; i < m_ar; i++) {
