@@ -11,10 +11,8 @@ def OnMult(m_ar : int, m_br : int) -> None:
 
     for i in range(0, m_ar):
         for j in range(0, m_br):
-            temp = 0
             for k in range(0, m_ar):
                 temp += pha[i*m_ar + k] * phb[k*m_br + j]
-            phc[i*m_ar + j] = temp
     
     time2 = time.time()
 
