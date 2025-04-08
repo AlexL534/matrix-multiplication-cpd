@@ -1,5 +1,4 @@
 import java.net.*;
-import java.util.*;
 
 public class SensorServer {
     private static int port;
