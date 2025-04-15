@@ -48,6 +48,33 @@ public class Server {
         System.out.println(message);
         out.println(message);
     }
+    private String readResponse(BufferedReader in) throws IOException{
+        return in.readLine();
+    }
+
+    private void authentication(BufferedReader in, PrintWriter out) throws Exception{
+        //TODO: Needs a lock to protect race condition when multiple threads try to access the auth files
+        String token = null;
+        while(true){
+            this.sendMessage("Username: ", out);
+            String username = readResponse(in).trim();
+            this.sendMessage("Password: ", out);
+            String password = readResponse(in).trim();
+            token = AuthService.signin(username, password);
+
+            if(token != null){
+                //insert the user into the current online(authenticated) users
+                //TODO: Needs a lock to protect race condition when multiple threads try to modify the hashmap
+                this.authUsers.put(token, username);
+                break;
+            }
+
+            this.sendMessage("Bad credentials. Try Again", out);
+        }
+        this.sendMessage("Token:" + token, out);
+        
+
+    }
 
     private void handleClients(Socket clientSocket) throws Exception{
         System.out.println("Connected Client");
@@ -57,6 +84,7 @@ public class Server {
 
         //TODO: Authentication
         this.sendMessage("Welcome to the CPD Chat server", out);
+        this.authentication(in, out);
         //TODO: Connection to chat room
 
         clientSocket.close();

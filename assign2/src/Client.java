@@ -26,15 +26,50 @@ public class Client {
         return in.readLine();
     }
 
-    public void run() throws IOException{
+    private void sendMessage(String message, PrintWriter out) throws Exception{
+        if(message.length() > 1024){
+            throw new Exception("Message is to large!");
+        }
+        out.println(message);
+    }
+
+    private void handleAuthentication(BufferedReader in, BufferedReader userInput, PrintWriter out) throws Exception{
+        //handles the authentication phase
+        while(true){
+            System.out.println(readResponse(in)); //username :
+            String username = userInput.readLine();
+            this.sendMessage(username, out);
+            System.out.println(readResponse(in)); //password :
+            String password = userInput.readLine();
+            this.sendMessage(password, out);
+
+            String message = readResponse(in);
+            String[] tokenInfo = message.split(":");
+
+            if(tokenInfo.length == 2){
+                this.authToken = tokenInfo[1];
+                break;
+            }
+            System.out.println(tokenInfo[0]);
+        }
+    }
+
+    public void run() throws Exception{
         BufferedReader in = new BufferedReader(new InputStreamReader(this.clientSocket.getInputStream()));
         PrintWriter out = new PrintWriter(this.clientSocket.getOutputStream(), true);
         BufferedReader userInput = new BufferedReader(new InputStreamReader(System.in));
+
+        //Welcome message
         System.out.println(readResponse(in));
+
+        //Authentication
+        this.handleAuthentication(in, userInput, out);
+        System.out.println(this.authToken);
+
         clientSocket.close();
     }
 
-    public static void main(String args[]) throws UnknownHostException, IOException{
+    public static void main(String args[]) throws Exception{
         System.out.println("Starting Client...");
 
         if(args.length != 2){
