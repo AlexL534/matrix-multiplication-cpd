@@ -40,19 +40,19 @@ public class AuthService {
             }
 
         } catch (IOException e) {
-            e.printStackTrace(); 
+            throw new Exception(e);
         }
         return token;
     } 
 
-    private static String signup(String username, String password) throws IOException{
+    private static String signup(String username, String password) throws Exception{
         String token = null;
 
-        try(PrintWriter writer = new PrintWriter(new FileWriter("auth.txt"))){
+        try(PrintWriter writer = new PrintWriter(new FileWriter("auth.txt", true), true)){
             writer.println(username + ":" + hashPassword(password));
             token = generateSecureToken();
-        }catch (IOException e) {
-            e.printStackTrace(); 
+        } catch (IOException e) {
+            throw new Exception(e); 
         }
         return token;
 

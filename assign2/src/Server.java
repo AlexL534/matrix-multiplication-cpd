@@ -6,6 +6,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class Server {
 
@@ -14,12 +15,20 @@ public class Server {
     private Map<String, String> authUsers; //key = user token, value = username
     private ServerSocket serverSocket;
 
+    //Locks
+    ReentrantLock authLock;         //Used when accessing the authentication service
+    ReentrantLock authUserslock;    //Used when accessing the authUser map
+
     //constructor
     public Server(int port){
         this.port = port;
         //TODO: parse chat rooms included in a file
         //initialize an empty auth user map. It will be filled when clients start to connect to the server
         authUsers = new HashMap<>();
+
+        //initialize the locks
+        authLock = new ReentrantLock();
+        authUserslock = new ReentrantLock();
     }
 
     public void start() throws IOException{
@@ -34,7 +43,6 @@ public class Server {
                 try {
                     this.handleClients(clientSocket);
                 } catch (Exception e) {
-                    // TODO Auto-generated catch block
                     e.printStackTrace();
                 }  
             });
@@ -53,27 +61,32 @@ public class Server {
     }
 
     private void authentication(BufferedReader in, PrintWriter out) throws Exception{
-        //TODO: Needs a lock to protect race condition when multiple threads try to access the auth files
-        String token = null;
-        while(true){
-            this.sendMessage("Username: ", out);
-            String username = readResponse(in).trim();
-            this.sendMessage("Password: ", out);
-            String password = readResponse(in).trim();
-            token = AuthService.signin(username, password);
 
-            if(token != null){
-                //insert the user into the current online(authenticated) users
-                //TODO: Needs a lock to protect race condition when multiple threads try to modify the hashmap
-                this.authUsers.put(token, username);
-                break;
+            String token = null;
+            while(true){
+                this.sendMessage("Username: ", out);
+                String username = readResponse(in).trim();
+                this.sendMessage("Password: ", out);
+                String password = readResponse(in).trim();
+
+                //lock the authentication code to avoid concurrent access to the auth files
+                authLock.lock();
+                token = AuthService.signin(username, password);
+                authLock.unlock();
+
+                if(token != null){
+                    //insert the user into the current online(authenticated) users
+                    //lock the access to the auth users map to avoid concurrent access to the same sata structure
+                    authUserslock.lock();
+                    this.authUsers.put(token, username);
+                    authUserslock.unlock();
+                    break;
+                }
+
+                this.sendMessage("Bad credentials. Try Again", out);
             }
-
-            this.sendMessage("Bad credentials. Try Again", out);
-        }
-        this.sendMessage("Token:" + token, out);
+            this.sendMessage("Token:" + token, out);
         
-
     }
 
     private void handleClients(Socket clientSocket) throws Exception{
@@ -82,7 +95,7 @@ public class Server {
         BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
         PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
 
-        //TODO: Authentication
+        //TODO: Authentication timeout system
         this.sendMessage("Welcome to the CPD Chat server", out);
         this.authentication(in, out);
         //TODO: Connection to chat room
