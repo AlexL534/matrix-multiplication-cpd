@@ -53,7 +53,7 @@ public class Server {
         if(message.length() > 1024){
             throw new Exception("Message is to large!");
         }
-        System.out.println(message);
+        //System.out.println(message);
         out.println(message);
     }
     private String readResponse(BufferedReader in) throws IOException{
@@ -82,7 +82,7 @@ public class Server {
                     authUserslock.unlock();
                     break;
                 }
-
+                
                 this.sendMessage("Bad credentials. Try Again", out);
             }
             this.sendMessage("Token:" + token, out);
@@ -132,6 +132,7 @@ public class Server {
                 // if token is valid, process the message
                 String username = authUsers.get(token);
                 sendMessage("[" + username + "]: " + message, out);
+                AuthService.refreshToken(token);
             }
             finally {
                 authUserslock.unlock();
@@ -149,6 +150,7 @@ public class Server {
             System.out.println("Incorrect usage!");
             System.out.println("Usage:");
             System.out.println("java Server <port>");
+            return;
         }
 
         //parse the arguments

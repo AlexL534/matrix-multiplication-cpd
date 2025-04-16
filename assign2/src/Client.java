@@ -53,7 +53,8 @@ public class Client {
                 return true;
             }
 
-            System.out.println(tokenInfo[0]);
+            //System.out.println(tokenInfo[0]);
+            
             System.out.print("Try again? (yes/no): ");
             if (!userInput.readLine().equalsIgnoreCase("yes")) {
                 return false; // User chose to quit
