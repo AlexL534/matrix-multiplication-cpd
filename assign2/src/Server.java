@@ -124,7 +124,6 @@ public class Server {
             System.out.println("Server catched an exception: " + e.toString());
         }
 
-
     }
     
 }
