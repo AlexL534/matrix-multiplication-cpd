@@ -8,11 +8,11 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashMap;
 
 public class AuthService {
 
-    private static final Map<String, Long> activeTokens = new ConcurrentHashMap<>(); // stores active tokens and their expiration times (in milliseconds)
+    private static final Map<String, Long> activeTokens = new HashMap<>(); // stores active tokens and their expiration times (in milliseconds)
 
     private static final long TOKEN_TIMEOUT = 30 * 60 * 1000; // timeout is 30 minutes
 

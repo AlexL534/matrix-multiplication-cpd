@@ -86,6 +86,7 @@ public class Server {
                 this.sendMessage("Bad credentials. Try Again", out);
             }
             this.sendMessage("Token:" + token, out);
+            out.flush();
         
     }
 

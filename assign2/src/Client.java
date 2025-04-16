@@ -64,7 +64,7 @@ public class Client {
 
         //Authentication
         this.handleAuthentication(in, userInput, out);
-        System.out.println(this.authToken);
+        System.out.println(this.authToken); 
 
         //Message Loop
         while (true) {
