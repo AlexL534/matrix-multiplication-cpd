@@ -86,6 +86,7 @@ public class Server {
                 this.sendMessage("Bad credentials. Try Again", out);
             }
             this.sendMessage("Token:" + token, out);
+            out.flush();
         
     }
 
@@ -95,10 +96,47 @@ public class Server {
         BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
         PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
 
-        //TODO: Authentication timeout system
         this.sendMessage("Welcome to the CPD Chat server", out);
         this.authentication(in, out);
         //TODO: Connection to chat room
+
+        String inputLine;
+        while ((inputLine = in.readLine()) != null) {
+            String[] parts = inputLine.split(":");
+            if (parts.length < 2) {
+                if (inputLine.equals("REAUTH")) {
+                    authentication(in, out); // restart auth flow
+                    continue;
+                }
+                sendMessage("ERROR: Invalid format", out);
+                continue;
+            }
+
+            String token = parts[0];
+            String message = parts[1];
+
+            // check if token is valid
+            authUserslock.lock();
+            try {
+                if (!AuthService.isTokenValid(token) || !authUsers.containsKey(token)) {
+                    sendMessage("SESSION_EXPIRED", out);
+                    authUserslock.lock();
+                    try {
+                        authUsers.remove(token);
+                    } finally {
+                        authUserslock.unlock();
+                    }
+                    continue;
+                }
+
+                // if token is valid, process the message
+                String username = authUsers.get(token);
+                sendMessage("[" + username + "]: " + message, out);
+            }
+            finally {
+                authUserslock.unlock();
+            }
+        }
 
         clientSocket.close();
 

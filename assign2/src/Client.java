@@ -33,12 +33,13 @@ public class Client {
         out.println(message);
     }
 
-    private void handleAuthentication(BufferedReader in, BufferedReader userInput, PrintWriter out) throws Exception{
+    private boolean handleAuthentication(BufferedReader in, BufferedReader userInput, PrintWriter out) throws Exception{
         //handles the authentication phase
         while(true){
             System.out.println(readResponse(in)); //username :
             String username = userInput.readLine();
             this.sendMessage(username, out);
+
             System.out.println(readResponse(in)); //password :
             String password = userInput.readLine();
             this.sendMessage(password, out);
@@ -46,11 +47,17 @@ public class Client {
             String message = readResponse(in);
             String[] tokenInfo = message.split(":");
 
-            if(tokenInfo.length == 2){
+            if (tokenInfo.length == 2){
                 this.authToken = tokenInfo[1];
-                break;
+                System.out.println("Authentication successful!");
+                return true;
             }
+
             System.out.println(tokenInfo[0]);
+            System.out.print("Try again? (yes/no): ");
+            if (!userInput.readLine().equalsIgnoreCase("yes")) {
+                return false; // User chose to quit
+            }
         }
     }
 
@@ -63,10 +70,49 @@ public class Client {
         System.out.println(readResponse(in));
 
         //Authentication
-        this.handleAuthentication(in, userInput, out);
-        System.out.println(this.authToken);
+        if (!handleAuthentication(in, userInput, out)) {
+            clientSocket.close();
+            return;
+        }
+
+        //Message Loop
+        while (true) {
+            try {
+                System.out.print("Enter message (or 'exit' to quit): ");
+                String message = userInput.readLine();
+    
+                if(message.equals("exit")){
+                    break;
+                }
+    
+                sendMessage(authToken + ":" + message, out);
+    
+                String response = readResponse(in);
+    
+                if (response == null) {
+                    System.out.println("\nServer disconnected unexpectedly.");
+                    break;
+                }
+
+                if (response.equals("SESSION_EXPIRED")){
+                    System.out.println("Session expired. Please reauthenticate.");
+                    sendMessage("REAUTH", out);
+                    if (!handleAuthentication(in, userInput, out)) {
+                        break;
+                    }
+                    continue;
+                }
+    
+                System.out.println("Server: " + response);
+            }
+            catch (IOException e) {
+                System.out.println("\nConnection error: " + e.getMessage());
+                break;
+            }
+        }
 
         clientSocket.close();
+        System.out.println("Disconnected from server");
     }
 
     public static void main(String args[]) throws Exception{
