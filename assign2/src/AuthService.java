@@ -9,10 +9,12 @@ import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class AuthService {
 
     private static final Map<String, Long> activeTokens = new HashMap<>(); // stores active tokens and their expiration times (in milliseconds)
+    private static final ReentrantLock tokensLock = new ReentrantLock();
 
     private static final long TOKEN_TIMEOUT = 30 * 60 * 1000; // timeout is 30 minutes
 
@@ -37,7 +39,13 @@ public class AuthService {
                     return null;
                }
                token = generateSecureToken();
-               activeTokens.put(token, System.currentTimeMillis() + TOKEN_TIMEOUT); // set expiration time for the token
+               tokensLock.lock();
+               try {
+                activeTokens.put(token, System.currentTimeMillis() + TOKEN_TIMEOUT); // set expiration time for the token
+               }
+               finally {
+                tokensLock.unlock();
+               }
                break;
             }
 
@@ -88,15 +96,22 @@ public class AuthService {
     }
 
     public static boolean isTokenValid(String token) {
-        Long expirationTime = activeTokens.get(token);
-        if (expirationTime == null) {
-            return false; // token was not found
+        tokensLock.lock();
+        try {
+            Long expirationTime = activeTokens.get(token);
+            if (expirationTime == null) {
+                return false; // token was not found
+            }
+            if (System.currentTimeMillis() > expirationTime) {
+                activeTokens.remove(token);
+                return false;
+            }
+            return true;
         }
-        if (System.currentTimeMillis() > expirationTime) {
-            activeTokens.remove(token);
-            return false;
+        finally {
+            tokensLock.unlock();
         }
-        return true;
+
     }
 
 }
