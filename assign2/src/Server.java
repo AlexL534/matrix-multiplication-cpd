@@ -100,6 +100,34 @@ public class Server {
         this.authentication(in, out);
         //TODO: Connection to chat room
 
+        String inputLine;
+        while ((inputLine = in.readLine()) != null) {
+            String[] parts = inputLine.split(":");
+            if (parts.length < 2) {
+                sendMessage("ERROR: Invalid message format. Use 'token:message'", out);
+                continue;
+            }
+
+            String token = parts[0];
+            String message = parts[1];
+
+            // check if token is valid
+            authUserslock.lock();
+            try {
+                if (!AuthService.isTokenValid(token) || !authUsers.containsKey(token)) {
+                    sendMessage("ERROR: Invalid or expired token. Please reauthenticate.", out);
+                    break;
+                }
+
+                // if token is valid, process the message
+                String username = authUsers.get(token);
+                sendMessage("[" + username + "]: " + message, out);
+            }
+            finally {
+                authUserslock.unlock();
+            }
+        }
+
         clientSocket.close();
 
     }

@@ -66,7 +66,42 @@ public class Client {
         this.handleAuthentication(in, userInput, out);
         System.out.println(this.authToken);
 
+        //Message Loop
+        while (true) {
+            try {
+                System.out.println("Enter message (or 'exit' to quit): ");
+                String message = userInput.readLine();
+    
+                if(message.equals("exit")){
+                    break;
+                }
+    
+                sendMessage(authToken + ":" + message, out);
+    
+                String response = readResponse(in);
+    
+                if (response == null) {
+                    System.out.println("\nServer disconnected unexpectedly.");
+                    break;
+                }
+    
+                // check token expiration error
+                if (response.startsWith("ERROR:")) {
+                    System.out.println("\n" + response);
+                    System.out.println("Please restart the client to reauthenticate");
+                    break;
+                }
+    
+                System.out.println("Server: " + response);
+            }
+            catch (IOException e) {
+                System.out.println("\nConnection error: " + e.getMessage());
+                break;
+            }
+        }
+
         clientSocket.close();
+        System.out.println("Disconnected from server");
     }
 
     public static void main(String args[]) throws Exception{
