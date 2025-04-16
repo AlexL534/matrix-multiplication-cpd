@@ -5,6 +5,7 @@ import java.io.PrintWriter;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.Condition;
 
 public class Client {
 
@@ -26,28 +27,36 @@ public class Client {
     }
 
     private String readResponseWithTimeout(BufferedReader in, long timeoutMillis) throws IOException {
-        final String[] result = new String[1];
-        final boolean[] done = new boolean[]{false};
+        final ReentrantLock lock = new ReentrantLock();
+        final Condition responseReceived = lock.newCondition();
+        final StringBuilder result = new StringBuilder();
         Thread t = Thread.ofVirtual().start(() -> {
             try {
                 String line = in.readLine();
-                synchronized (done) {
-                    result[0] = line;
-                    done[0] = true;
-                    done.notify();
+                lock.lock();
+                try {
+                    if (line != null) {
+                        result.append(line);
+                        responseReceived.signal(); // Notify the main thread
+                    }
+                } finally {
+                    lock.unlock();
                 }
             } catch (IOException ignored) {}
         });
 
-        synchronized (done) {
-            try {
-                done.wait(timeoutMillis);
-            } catch (InterruptedException e) {
-                throw new IOException("Interrupted while waiting for server response.");
+        lock.lock();
+        try {
+            boolean received = responseReceived.await(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
+            if (!received) {
+                throw new IOException("Timed out waiting for server response.");
             }
-            if (!done[0]) throw new IOException("Timed out waiting for server response.");
+        } catch (InterruptedException e) {
+            throw new IOException("Interrupted while waiting for server response.");
+        } finally {
+            lock.unlock();
         }
-        return result[0];
+        return result.toString();
     }
 
     private void sendMessage(String message, PrintWriter out) throws Exception{
@@ -58,33 +67,42 @@ public class Client {
     }
 
     private boolean waitForUserInput(BufferedReader reader, StringBuilder target, long timeoutMillis) throws IOException {
+        final ReentrantLock lock = new ReentrantLock();
+        final Condition inputAvailable = lock.newCondition();
         final boolean[] done = new boolean[]{false};
+
         Thread t = Thread.ofVirtual().start(() -> {
             try {
                 String line = reader.readLine();
-                synchronized (done) {
+                lock.lock();
+                try {
                     if (line != null) {
+                        target.setLength(0);
                         target.append(line);
                     }
                     done[0] = true;
-                    done.notify();
+                    inputAvailable.signal(); // Notify the main thread
+                } finally {
+                    lock.unlock();
                 }
             } catch (IOException ignored) {}
         });
 
-        synchronized (done) {
-            try {
-                done.wait(timeoutMillis);
-            } catch (InterruptedException e) {
-                throw new IOException("Interrupted while waiting for user input.");
-            }
+        lock.lock();
+        try {
+            boolean gotInput = inputAvailable.await(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
             return done[0];
+        } catch (InterruptedException e) {
+            throw new IOException("Interrupted while waiting for user input.");
+        } finally {
+            lock.unlock();
         }
     }
 
     private boolean handleAuthentication(BufferedReader in, BufferedReader userInput, PrintWriter out) throws Exception {
         while (true) {
             System.out.println(readResponseWithTimeout(in, timeoutServer));
+
             StringBuilder username = new StringBuilder();
             if (!waitForUserInput(userInput, username, timeoutAfk)) {
                 System.out.println("Disconnected: Timed out waiting for username.");
@@ -93,6 +111,7 @@ public class Client {
             sendMessage(username.toString(), out);
 
             System.out.println(readResponseWithTimeout(in, timeoutServer));
+
             StringBuilder password = new StringBuilder();
             if (!waitForUserInput(userInput, password, timeoutAfk)) {
                 System.out.println("Disconnected: Timed out waiting for password.");
@@ -108,14 +127,13 @@ public class Client {
                 return true;
             }
 
-            //System.out.println(tokenInfo[0]);
-            
             System.out.print("Try again? (yes/no): ");
             StringBuilder retry = new StringBuilder();
             if (!waitForUserInput(userInput, retry, timeoutAfk)) {
                 System.out.println("Disconnected: Timed out waiting for retry decision.");
                 return false;
             }
+
             if (!retry.toString().equalsIgnoreCase("yes")) {
                 return false;
             }
