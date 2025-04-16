@@ -96,7 +96,6 @@ public class Server {
         BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
         PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
 
-        //TODO: Authentication timeout system
         this.sendMessage("Welcome to the CPD Chat server", out);
         this.authentication(in, out);
         //TODO: Connection to chat room
@@ -105,7 +104,11 @@ public class Server {
         while ((inputLine = in.readLine()) != null) {
             String[] parts = inputLine.split(":");
             if (parts.length < 2) {
-                sendMessage("ERROR: Invalid message format. Use 'token:message'", out);
+                if (inputLine.equals("REAUTH")) {
+                    authentication(in, out); // restart auth flow
+                    continue;
+                }
+                sendMessage("ERROR: Invalid format", out);
                 continue;
             }
 
@@ -116,8 +119,14 @@ public class Server {
             authUserslock.lock();
             try {
                 if (!AuthService.isTokenValid(token) || !authUsers.containsKey(token)) {
-                    sendMessage("ERROR: Invalid or expired token. Please reauthenticate.", out);
-                    break;
+                    sendMessage("SESSION_EXPIRED", out);
+                    authUserslock.lock();
+                    try {
+                        authUsers.remove(token);
+                    } finally {
+                        authUserslock.unlock();
+                    }
+                    continue;
                 }
 
                 // if token is valid, process the message

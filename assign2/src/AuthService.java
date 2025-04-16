@@ -16,7 +16,7 @@ public class AuthService {
     private static final Map<String, Long> activeTokens = new HashMap<>(); // stores active tokens and their expiration times (in milliseconds)
     private static final ReentrantLock tokensLock = new ReentrantLock();
 
-    private static final long TOKEN_TIMEOUT = 30 * 60 * 1000; // timeout is 30 minutes
+    private static final long TOKEN_TIMEOUT = 1 * 60 * 1000; // timeout is 30 minutes
 
 
     public static String signin(String username, String password) throws Exception{
