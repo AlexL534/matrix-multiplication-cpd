@@ -67,9 +67,13 @@ public class Server {
             String token = null;
             while(true){
                 this.sendMessage("Username: ", out);
-                String username = readResponse(in).trim();
+                String username = readResponse(in);
+                if (username == null) throw new Exception("No Username.");
+                else username = username.trim();
                 this.sendMessage("Password: ", out);
-                String password = readResponse(in).trim();
+                String password = readResponse(in);
+                if (password == null) throw new Exception("No Password.");
+                else password = password.trim();
 
                 //lock the authentication code to avoid concurrent access to the auth files
                 authLock.lock();
@@ -100,7 +104,13 @@ public class Server {
         PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
 
         this.sendMessage("Welcome to the CPD Chat server", out);
-        this.authentication(in, out);
+        try { 
+            this.authentication(in, out);
+        }
+        catch (Exception e){
+            System.out.println(e.getMessage() + "\n" + "Client Disconnected.");
+            clientSocket.close();
+        } 
         //TODO: Connection to chat room
 
         String inputLine;
@@ -108,7 +118,13 @@ public class Server {
             String[] parts = inputLine.split(":");
             if (parts.length < 2) {
                 if (inputLine.equals("REAUTH")) {
-                    authentication(in, out); // restart auth flow
+                    try { // restart auth flow
+                      this.authentication(in, out);
+                    }
+                    catch (Exception e){
+                      System.out.println(e.getMessage() + "\n" + "Client Disconnected.");
+                      clientSocket.close();
+                    } 
                     continue;
                 }
                 sendMessage("ERROR: Invalid format", out);
