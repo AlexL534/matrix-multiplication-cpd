@@ -18,17 +18,20 @@ public class Server {
     //Locks
     ReentrantLock authLock;         //Used when accessing the authentication service
     ReentrantLock authUserslock;    //Used when accessing the authUser map
+    ReentrantLock chatRoomsLock;    //Used when accessing the chatRoom map
 
     //constructor
-    public Server(int port){
+    public Server(int port) throws Exception{
         this.port = port;
-        //TODO: parse chat rooms included in a file
+        //parse chat rooms included in a file
+        chatRooms = ChatService.getAvailableChats();
         //initialize an empty auth user map. It will be filled when clients start to connect to the server
         authUsers = new HashMap<>();
 
         //initialize the locks
         authLock = new ReentrantLock();
         authUserslock = new ReentrantLock();
+        chatRoomsLock = new ReentrantLock();
     }
 
     public void start() throws IOException{
@@ -53,7 +56,6 @@ public class Server {
         if(message.length() > 1024){
             throw new Exception("Message is to large!");
         }
-        //System.out.println(message);
         out.println(message);
     }
     private String readResponse(BufferedReader in) throws IOException{
@@ -89,6 +91,7 @@ public class Server {
             out.flush();
         
     }
+
 
     private void handleClients(Socket clientSocket) throws Exception{
         System.out.println("Connected Client");
@@ -156,11 +159,11 @@ public class Server {
         //parse the arguments
         int port = Integer.parseInt(args[0]);
 
-        Server server = new Server(port);
         try{
+            Server server = new Server(port);
             server.start();
             server.run();
-        } catch(IOException e){
+        } catch(Exception e){
             System.out.println("Server catched an exception: " + e.toString());
         }
 

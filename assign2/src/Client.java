@@ -9,7 +9,7 @@ import java.util.concurrent.locks.Condition;
 
 public class Client {
 
-    private long timeoutAfk = 4 * 1000; // Afk Timeout to avoid slow clients
+    private long timeoutAfk = 60 * 1000; // Afk Timeout to avoid slow clients
     private long timeoutServer = 10 * 60 * 1000; // Max await time for server response
     private int port;
     private String address;

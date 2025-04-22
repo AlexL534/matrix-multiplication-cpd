@@ -30,7 +30,7 @@ public class AuthService {
             while ((line = reader.readLine()) != null) {
                String[] credentials = line.split(":");
                if(credentials.length != 2){
-                    throw new Exception("Something wrong happened when parsing the auth file!");
+                    throw new Error("Something wrong happened when parsing the auth file!");
                }
                if(!credentials[0].trim().equals(username)){
                     //User does not match
