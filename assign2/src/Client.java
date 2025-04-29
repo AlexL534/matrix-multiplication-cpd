@@ -10,11 +10,12 @@ import java.util.concurrent.locks.Condition;
 public class Client {
 
     private long timeoutAfk = 60 * 1000; // Afk Timeout to avoid slow clients
-    private long timeoutServer = 10 * 60 * 1000; // Max await time for server response
+    private long timeoutServer = 60 * 1000; // Max await time for server response
     private int port;
     private String address;
     private String authToken; //Similar to jwt token. The client service doesn't need to know the actual user information
     private Socket clientSocket;
+    private final String FLAG = "::";
 
     public Client(int port, String address){
         this.port = port;
@@ -31,18 +32,20 @@ public class Client {
         final Condition responseReceived = lock.newCondition();
         final StringBuilder result = new StringBuilder();
         Thread t = Thread.ofVirtual().start(() -> {
+            
             try {
                 String line = in.readLine();
                 lock.lock();
-                try {
-                    if (line != null) {
-                        result.append(line);
-                        responseReceived.signal(); // Notify the main thread
-                    }
-                } finally {
-                    lock.unlock();
+                if (line != null) {
+                    result.append(line);
+                    responseReceived.signal(); // Notify the main thread
                 }
+                lock.unlock();
+                
             } catch (IOException ignored) {}
+            finally {
+                
+            }
         });
 
         lock.lock();
@@ -140,6 +143,44 @@ public class Client {
         }
     }
 
+    private String readMultilineMessage(BufferedReader in) throws Exception {
+        StringBuilder response = new StringBuilder();
+            String line = "";
+            try{
+                line = readResponseWithTimeout(in, timeoutServer);
+            } catch (Exception e){
+                System.err.println(e.getMessage());
+                clientSocket.close();
+                throw new Exception("Could not connect to the server");
+            }
+            System.out.println(line);
+
+            if(!line.equals(FLAG)){
+                //is not a multiline
+                
+                return line;
+            }
+
+            //get the rest of the message if it
+            while(true){
+                try{
+                    line = readResponseWithTimeout(in, timeoutServer);
+                    System.out.println(line);
+                } catch (Exception e){
+                    System.err.println(e.getMessage());
+                    clientSocket.close();
+                    throw new Exception("Could not connect to the server");
+                }
+                if(line.equals(FLAG)){
+                    break;
+                }
+                response.append(line).append('\n');
+                
+            }
+        System.out.println(response.toString());
+        return response.toString();
+    }
+
     public void run() throws Exception {
         BufferedReader in = new BufferedReader(new InputStreamReader(this.clientSocket.getInputStream()));
         PrintWriter out = new PrintWriter(this.clientSocket.getOutputStream(), true);
@@ -164,15 +205,15 @@ public class Client {
                 break;
             }
 
-            sendMessage(authToken + ":" + message.toString(), out);
-
-            String response = readResponseWithTimeout(in, timeoutServer);
-            if (response == null) {
-                System.out.println("\nServer disconnected unexpectedly.");
-                break;
+            if(message.isEmpty()){
+                message.append("next"); // 
             }
 
-            if (response.equals("SESSION_EXPIRED")) {
+            sendMessage(authToken + ":" + message.toString(), out);
+
+            String response = readMultilineMessage(in);
+
+            if (response.toString().equals("SESSION_EXPIRED")) {
                 System.out.println("Session expired. Please reauthenticate.");
                 sendMessage("REAUTH", out);
                 if (!handleAuthentication(in, userInput, out)) {

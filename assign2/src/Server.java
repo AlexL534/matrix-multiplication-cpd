@@ -4,7 +4,9 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -13,25 +15,41 @@ public class Server {
     private int port;
     private Map<Integer, String> chatRooms; //key = chat ID, value = chat name
     private Map<String, String> authUsers; //key = user token, value = username
+    private Map<String, PrintWriter> authSocket; //key = user token, value =  socket to connect with the authenticated user
+    private Map<Integer, List<String>> roomsUsers;  //key= room id, value = list of user(token) in the room
+    private Map<String, Integer> userRoom; //key = user token, value = room id. Indicates the room where the user is now
     private ServerSocket serverSocket;
+    private final String FLAG = "::";
 
     //Locks
     ReentrantLock authLock;         //Used when accessing the authentication service
     ReentrantLock authUserslock;    //Used when accessing the authUser map
     ReentrantLock chatRoomsLock;    //Used when accessing the chatRoom map
+    ReentrantLock userRoomLock;    //Used when accessing the userRoom map
+    ReentrantLock roomsUsersLock;
+    ReentrantLock authSocketLock;
 
     //constructor
     public Server(int port) throws Exception{
         this.port = port;
         //parse chat rooms included in a file
         chatRooms = ChatService.getAvailableChats();
+        roomsUsers = new HashMap<>();
+        for(Integer id : chatRooms.keySet()){
+            roomsUsers.put(id, new ArrayList<>());
+        }
         //initialize an empty auth user map. It will be filled when clients start to connect to the server
         authUsers = new HashMap<>();
+        userRoom = new HashMap<>();
+        authSocket = new HashMap<>();
 
         //initialize the locks
         authLock = new ReentrantLock();
         authUserslock = new ReentrantLock();
         chatRoomsLock = new ReentrantLock();
+        userRoomLock = new ReentrantLock();
+        roomsUsersLock = new ReentrantLock();
+        authSocketLock = new ReentrantLock();
     }
 
     public void start() throws IOException{
@@ -56,17 +74,19 @@ public class Server {
         if(message.length() > 1024){
             throw new Exception("Message is to large!");
         }
+        System.out.println(message);
         out.println(message);
     }
     private String readResponse(BufferedReader in) throws IOException{
         return in.readLine();
     }
 
-    private void authentication(BufferedReader in, PrintWriter out) throws Exception{
+    private String authentication(BufferedReader in, PrintWriter out) throws Exception{
 
             String token = null;
             while(true){
                 this.sendMessage("Username: ", out);
+                System.out.println("here1");
                 String username = readResponse(in);
                 if (username == null) throw new Exception("No Username.");
                 else username = username.trim();
@@ -86,6 +106,11 @@ public class Server {
                     authUserslock.lock();
                     this.authUsers.put(token, username);
                     authUserslock.unlock();
+
+                    //insert the mapping between the user token and its output stream used to send messages to him
+                    authSocketLock.lock();
+                    authSocket.put(token, out);
+                    authSocketLock.unlock();
                     break;
                 }
                 
@@ -93,7 +118,66 @@ public class Server {
             }
             this.sendMessage("Token:" + token, out);
             out.flush();
+
+            return token;
         
+    }
+
+    private void sendRoomSelection(PrintWriter out) throws Exception{
+        //add a flag for a multiline message
+        sendMessage(FLAG, out);
+        this.sendMessage("Available Rooms:", out);
+        for(Integer id : chatRooms.keySet()){
+            this.sendMessage(id.toString() +  ". " + chatRooms.get(id), out);
+        }
+        this.sendMessage("Enter room id to enter", out);
+        sendMessage(FLAG, out);
+    }
+
+    private void handleRoomSelection(PrintWriter out, String token, String selected ) throws Exception{
+
+        System.out.println(selected);
+        Integer selectedInteger = -1;
+        try{
+            selectedInteger = Integer.parseInt(selected);
+        }
+        catch(NumberFormatException e){
+            sendMessage("Please send a number!", out);
+            return;
+        }
+
+        if(selectedInteger < 0 || selectedInteger > chatRooms.size()){
+            sendMessage("Invalid ID: " + selectedInteger.toString() , out);
+            return;
+        }
+
+        sendMessage("Room: " + chatRooms.get(selectedInteger), out);
+
+        userRoomLock.lock();
+        try{
+            userRoom.put(token, selectedInteger);
+        } catch(Exception e){
+            throw new Exception(e.toString());
+        }
+        finally{
+            userRoomLock.unlock();
+        }
+
+        roomsUsersLock.lock();
+        try{
+            List<String> users = roomsUsers.get(selectedInteger);
+            if(users.add(token)){
+                roomsUsers.replace(selectedInteger, users);
+            }
+            else{
+                throw new Exception("Error inserting user into the room");
+            }
+        } catch(Exception e){
+            throw new Exception(e.toString());
+        }
+        finally{
+            roomsUsersLock.unlock();
+        }
     }
 
 
@@ -104,8 +188,11 @@ public class Server {
         PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
 
         this.sendMessage("Welcome to the CPD Chat server", out);
+
+        String token = null;
         try { 
-            this.authentication(in, out);
+            System.out.println("here");
+            token = this.authentication(in, out);
         }
         catch (Exception e){
             System.out.println(e.getMessage() + "\n" + "Client Disconnected.");
@@ -114,8 +201,11 @@ public class Server {
         //TODO: Connection to chat room
 
         String inputLine;
+        Boolean isSendRooms = true;
+        
         while ((inputLine = in.readLine()) != null) {
             String[] parts = inputLine.split(":");
+            System.out.println(parts[1].toString());
             if (parts.length < 2) {
                 if (inputLine.equals("REAUTH")) {
                     try { // restart auth flow
@@ -123,7 +213,7 @@ public class Server {
                     }
                     catch (Exception e){
                       System.out.println(e.getMessage() + "\n" + "Client Disconnected.");
-                      clientSocket.close();
+                      break;
                     } 
                     continue;
                 }
@@ -131,7 +221,7 @@ public class Server {
                 continue;
             }
 
-            String token = parts[0];
+            token = parts[0];
             String message = parts[1];
 
             // check if token is valid
@@ -147,19 +237,110 @@ public class Server {
                     }
                     continue;
                 }
-
-                // if token is valid, process the message
-                String username = authUsers.get(token);
-                sendMessage("[" + username + "]: " + message, out);
-                AuthService.refreshToken(token);
             }
             finally {
                 authUserslock.unlock();
             }
+
+            //If the user is in a room, send the message to the other users. Else, send the rooms available to connect
+            if(userRoom.containsKey(token)){
+                //send the message to the other
+                System.out.println("here");
+                sendMessage(message, out); //TODO: send to all the connected users
+            }
+            else{
+                //show the available rooms
+                try{
+                    if(isSendRooms){
+                        sendRoomSelection(out);
+                        isSendRooms = false;
+                    }
+                    else{
+                        handleRoomSelection(out, token, message);
+                    }
+                } catch(Exception e){
+                    System.err.println(e);
+                    sendMessage("Error during the room selection!", out);
+                }
+            }
+
+
+            authLock.lock();
+            try{
+                AuthService.refreshToken(token);
+            } catch(Exception e){
+                throw new Exception(e.getMessage());
+            } finally{
+                authLock.unlock();
+            }
+            
+            
+        }
+        
+        //remove user from server before closing connection
+        if(token != null){
+            disconnectUser(token); //disconnects the user from all the server's datastructures
         }
 
         clientSocket.close();
 
+    }
+
+    private void disconnectUser(String token) throws Exception{
+        Integer roomId = null;
+
+            //remove the user from the user rooms map
+            userRoomLock.lock();
+            try{
+                if(userRoom.containsKey(token)){
+                    roomId = userRoom.get(token);
+                    userRoom.remove(token);
+                }
+            } catch(Exception e){
+                throw new Exception(e.toString());
+            }
+            finally{
+                userRoomLock.unlock();
+            }
+
+            //update the room where the user was
+            if(roomId != null){
+                roomsUsersLock.lock();
+                try{
+                    List<String> users = roomsUsers.get(roomId);
+                    users.remove(token);
+                    roomsUsers.replace(roomId, users);
+                } catch(Exception e){
+                    throw new Exception(e.toString());
+                }
+                finally{
+                    roomsUsersLock.unlock();
+                }
+            }
+
+            //remove the user from the socket mapping
+            authSocketLock.lock();
+            try{
+                if(authSocket.containsKey(token)){
+                    authSocket.remove(token);
+                }
+            }
+            catch(Exception e){
+                throw new Exception(e.toString());
+            }finally{
+                authSocketLock.unlock();
+            }
+
+            //remove the user from the authenticated users
+            authUserslock.lock();
+            try{
+            authUsers.remove(token);
+            } catch(Exception e){
+                throw new Exception(e.toString());
+            }
+            finally{
+                authUserslock.unlock();
+            }
     }
 
     public static void main(String args[]){
