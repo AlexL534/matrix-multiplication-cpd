@@ -177,6 +177,14 @@ public class Server {
         }
     }
 
+    private void sendMessageToChat(String message, Integer roomId, String token){
+        //send message to all the users in the chat
+        for(String userToken : roomsUsers.get(roomId)){
+            if(userToken.equals(token)) continue; //skip the user that is sendinf the message
+            PrintWriter out = authSocket.get(userToken);
+            out.println(message);
+        }
+    }
 
     private void handleClients(Socket clientSocket) throws Exception{
         System.out.println("Connected Client");
@@ -246,7 +254,7 @@ public class Server {
             //If the user is in a room, send the message to the other users. Else, send the rooms available to connect
             if(userRoom.containsKey(token)){
                 //send the message to the other
-                sendMessage(message, out); //TODO: send to all the connected users
+                sendMessageToChat(message, userRoom.get(token), token);
             }
             else{
                 //show the available rooms

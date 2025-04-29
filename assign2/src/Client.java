@@ -216,11 +216,11 @@ public class Client {
             StringBuilder message = new StringBuilder();
 
             //waits for the user input. Checks if the user is afk
+
             if (!waitForUserInput(userInput, message, timeoutAfk)) {
                 System.out.println("Disconnected for being AFK.");
                 break;
             }
-
             //check if the message is to exit the server
             if (message.toString().equalsIgnoreCase("exit")) {
                 break;
