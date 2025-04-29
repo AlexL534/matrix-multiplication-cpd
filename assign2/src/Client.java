@@ -5,6 +5,8 @@ import java.io.PrintWriter;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 
 public class Client {
@@ -31,31 +33,34 @@ public class Client {
         final ReentrantLock lock = new ReentrantLock();
         final Condition responseReceived = lock.newCondition();
         final StringBuilder result = new StringBuilder();
+        final AtomicBoolean isResponseReady = new AtomicBoolean(false);
+
         Thread t = Thread.ofVirtual().start(() -> {
-            
             try {
                 String line = in.readLine();
                 lock.lock();
-                if (line != null) {
-                    result.append(line);
-                    responseReceived.signal(); // Notify the main thread
+                try {
+                    if (line != null) {
+                        result.append(line);
+                        isResponseReady.set(true); // update the shared flag
+                        responseReceived.signal(); // notify the main thread
+                    }
+                } finally {
+                    lock.unlock();
                 }
-                lock.unlock();
-                
             } catch (IOException ignored) {}
-            finally {
-                
-            }
         });
 
         lock.lock();
         try {
-            boolean received = responseReceived.await(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
-            if (!received) {
-                throw new IOException("Timed out waiting for server response.");
+            while (!isResponseReady.get()) {
+                boolean received = responseReceived.await(timeoutMillis, TimeUnit.MILLISECONDS);
+                if (!received && !isResponseReady.get()) {
+                    throw new IOException("Timed out waiting for server response.");
+                }
             }
         } catch (InterruptedException e) {
-            throw new IOException("Interrupted while waiting for server response.");
+            throw new IOException("Interrupted while waiting for server response.", e);
         } finally {
             lock.unlock();
         }
@@ -73,6 +78,7 @@ public class Client {
         final ReentrantLock lock = new ReentrantLock();
         final Condition inputAvailable = lock.newCondition();
         final boolean[] done = new boolean[]{false};
+        final AtomicBoolean isResponseReady = new AtomicBoolean(false);
 
         Thread t = Thread.ofVirtual().start(() -> {
             try {
@@ -81,6 +87,14 @@ public class Client {
                 try {
                     if (line != null) {
                         target.setLength(0);
+                        isResponseReady.set(true); // update the shared flag
+
+                        //filters the : character as it is used as a flag and separator in the message protocol
+                        if(line.contains(":")){
+                            line = line.replaceAll(":", "");
+                            System.out.println("The character \":\" was removed from your input.");
+                        }
+                        
                         target.append(line);
                     }
                     done[0] = true;
@@ -93,8 +107,15 @@ public class Client {
 
         lock.lock();
         try {
-            boolean gotInput = inputAvailable.await(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
+            while (!isResponseReady.get()) {
+                boolean gotInput = inputAvailable.await(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
+                if (!gotInput && !isResponseReady.get()) {
+                    throw new IOException("Timed out waiting for user inout.");
+                }
+                
+            }
             return done[0];
+            
         } catch (InterruptedException e) {
             throw new IOException("Interrupted while waiting for user input.");
         } finally {
@@ -153,7 +174,6 @@ public class Client {
                 clientSocket.close();
                 throw new Exception("Could not connect to the server");
             }
-            System.out.println(line);
 
             if(!line.equals(FLAG)){
                 //is not a multiline
@@ -165,7 +185,6 @@ public class Client {
             while(true){
                 try{
                     line = readResponseWithTimeout(in, timeoutServer);
-                    System.out.println(line);
                 } catch (Exception e){
                     System.err.println(e.getMessage());
                     clientSocket.close();
@@ -177,7 +196,6 @@ public class Client {
                 response.append(line).append('\n');
                 
             }
-        System.out.println(response.toString());
         return response.toString();
     }
 
@@ -196,23 +214,29 @@ public class Client {
         while (true) {
             System.out.print("Enter message (or 'exit' to quit): ");
             StringBuilder message = new StringBuilder();
+
+            //waits for the user input. Checks if the user is afk
             if (!waitForUserInput(userInput, message, timeoutAfk)) {
                 System.out.println("Disconnected for being AFK.");
                 break;
             }
 
+            //check if the message is to exit the server
             if (message.toString().equalsIgnoreCase("exit")) {
                 break;
             }
 
             if(message.isEmpty()){
-                message.append("next"); // 
+                message.append("next"); // Empty message. Send a dummy next message to procede (this usually happens when the user clicks enter)
             }
 
             sendMessage(authToken + ":" + message.toString(), out);
 
+            //read the server response. Supports multiline messages (start and end with a flag)
             String response = readMultilineMessage(in);
 
+
+            //session expired. Needs to reauth
             if (response.toString().equals("SESSION_EXPIRED")) {
                 System.out.println("Session expired. Please reauthenticate.");
                 sendMessage("REAUTH", out);
@@ -222,7 +246,7 @@ public class Client {
                 continue;
             }
 
-            System.out.println("Server: " + response);
+            System.out.println("\nServer: " + response);
         }
 
         clientSocket.close();

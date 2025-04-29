@@ -74,7 +74,6 @@ public class Server {
         if(message.length() > 1024){
             throw new Exception("Message is to large!");
         }
-        System.out.println(message);
         out.println(message);
     }
     private String readResponse(BufferedReader in) throws IOException{
@@ -86,7 +85,6 @@ public class Server {
             String token = null;
             while(true){
                 this.sendMessage("Username: ", out);
-                System.out.println("here1");
                 String username = readResponse(in);
                 if (username == null) throw new Exception("No Username.");
                 else username = username.trim();
@@ -136,7 +134,6 @@ public class Server {
 
     private void handleRoomSelection(PrintWriter out, String token, String selected ) throws Exception{
 
-        System.out.println(selected);
         Integer selectedInteger = -1;
         try{
             selectedInteger = Integer.parseInt(selected);
@@ -191,12 +188,12 @@ public class Server {
 
         String token = null;
         try { 
-            System.out.println("here");
             token = this.authentication(in, out);
         }
         catch (Exception e){
             System.out.println(e.getMessage() + "\n" + "Client Disconnected.");
             clientSocket.close();
+            return;
         } 
         //TODO: Connection to chat room
 
@@ -205,14 +202,13 @@ public class Server {
         
         while ((inputLine = in.readLine()) != null) {
             String[] parts = inputLine.split(":");
-            System.out.println(parts[1].toString());
             if (parts.length < 2) {
                 if (inputLine.equals("REAUTH")) {
                     try { // restart auth flow
                       this.authentication(in, out);
                     }
                     catch (Exception e){
-                      System.out.println(e.getMessage() + "\n" + "Client Disconnected.");
+                      System.out.println(e.getMessage());
                       break;
                     } 
                     continue;
@@ -238,6 +234,11 @@ public class Server {
                     continue;
                 }
             }
+            catch(Exception e){
+                System.err.println(e.getMessage());
+                sendMessage("Internal Server Error!", out);
+                break;
+            }
             finally {
                 authUserslock.unlock();
             }
@@ -245,7 +246,6 @@ public class Server {
             //If the user is in a room, send the message to the other users. Else, send the rooms available to connect
             if(userRoom.containsKey(token)){
                 //send the message to the other
-                System.out.println("here");
                 sendMessage(message, out); //TODO: send to all the connected users
             }
             else{
@@ -259,8 +259,9 @@ public class Server {
                         handleRoomSelection(out, token, message);
                     }
                 } catch(Exception e){
-                    System.err.println(e);
-                    sendMessage("Error during the room selection!", out);
+                    System.err.println(e.getMessage());
+                    sendMessage("Internal Server Error!", out);
+                    break;
                 }
             }
 
@@ -269,7 +270,9 @@ public class Server {
             try{
                 AuthService.refreshToken(token);
             } catch(Exception e){
-                throw new Exception(e.getMessage());
+                System.err.println(e.getMessage());
+                sendMessage("Internal Server Error!", out);
+                break;
             } finally{
                 authLock.unlock();
             }
@@ -283,6 +286,8 @@ public class Server {
         }
 
         clientSocket.close();
+
+        System.out.println("Client Disconnected!");
 
     }
 
