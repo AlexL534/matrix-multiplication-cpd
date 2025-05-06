@@ -5,6 +5,7 @@ import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,9 @@ public class Server {
     private Map<String, Integer> userRoom; //key = user token, value = room id. Indicates the room where the user is now
     private ServerSocket serverSocket;
     private final String FLAG = "::";
+    private final LLMService llmService = new LLMService();
+    private final Map<Integer, List<String>> roomConversations = new HashMap<>();
+    private final ReentrantLock conversationLock = new ReentrantLock();
 
     //Locks
     ReentrantLock authLock;         //Used when accessing the authentication service
@@ -252,11 +256,16 @@ public class Server {
             }
 
             //If the user is in a room, send the message to the other users. Else, send the rooms available to connect
-            if(userRoom.containsKey(token)){
+            if (userRoom.containsKey(token)){
                 //send the message to the other
-                sendMessageToChat(message, userRoom.get(token), token);
+                ChatService.ChatRoomInfo roomInfo = ChatService.getAvailableChats().get(userRoom.get(token));
+                if (roomInfo.isAIRoom) {
+                    handleAIRoomMessage(message, userRoom.get(token), token);
+                } else {
+                    sendMessageToChat(message, userRoom.get(token), token);
+                }
             }
-            else{
+            else {
                 //show the available rooms
                 try{
                     if(isSendRooms){
@@ -378,5 +387,29 @@ public class Server {
         }
 
     }
-    
+
+    private void handleAIRoomMessage(String message, Integer roomId, String token) {
+        conversationLock.lock();
+        try {
+            String username = authUsers.get(token);
+            String formattedMessage = username + ": " + message;
+            List<String> conversation = roomConversations.computeIfAbsent(roomId, k -> new ArrayList<>());
+            conversation.add(formattedMessage);
+
+            ChatService.ChatRoomInfo roomInfo = ChatService.getAvailableChats().get(roomId);
+            
+            String aiResponse = llmService.getAIResponse(roomInfo.prompt, conversation);
+            
+            String botMessage = "Bot: " + aiResponse;
+            conversation.add(botMessage);
+            
+            sendMessageToChat(formattedMessage, roomId, token);
+            sendMessageToChat(botMessage, roomId, "BOT_TOKEN");
+        } catch (Exception e) {
+            System.err.println("Error processing AI message: " + e.getMessage());
+            sendMessageToChat("Error getting AI response", roomId, "SYSTEM");
+        } finally {
+            conversationLock.unlock();
+        }
+    }
 }
