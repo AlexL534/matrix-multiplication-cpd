@@ -9,7 +9,7 @@ import java.util.concurrent.locks.Condition;
 
 public class Client {
 
-    private long timeoutAfk = 60 * 1000; // Afk Timeout to avoid slow clients
+    private long timeoutAfk = 5 * 1000; // Afk Timeout to avoid slow clients
     private long timeoutServer = 60 * 1000; // Max await time for server response
     private int port;
     private String address;
@@ -38,7 +38,7 @@ public class Client {
         final boolean[] done = new boolean[]{false};
         final boolean[] isResponseReady = new boolean[]{false};
 
-        Thread.ofVirtual().start(() -> {
+        Thread t = Thread.ofVirtual().start(() -> {
             try {
                 String line = reader.readLine();
                 lock.lock();
@@ -79,10 +79,12 @@ public class Client {
         lock.lock();
         try {
             while (!isResponseReady[0]) {
+                
                 boolean gotInput = inputAvailable.await(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
-
+                
                 lockIsResponsible.lock();
                 if (!gotInput && !isResponseReady[0]) {
+                    t.interrupt();
                     throw new IOException("Timed out waiting for user input.");
                 }
                 lockIsResponsible.unlock();
@@ -162,22 +164,29 @@ public class Client {
         final boolean[] isReauth = new boolean[]{false}; //used to control the execution of the message rection thread
 
         try{
+            //Welcome message
             System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
 
+            //authentication
             if (!handleAuthentication(in, userInput, out)) {
                 clientSocket.close();
                 return;
             }
 
-            System.out.print("Enter message (or 'exit' to quit)");
+            //usage instructions that appear before the room options
+            System.out.println("\nUsage instructions:");
+            System.out.println("    - Enter a message to interact with the server;");
+            System.out.println("    - Enter 'exit' at any time to quit the server;");
+            System.out.println("    - When some special input is asked, please use the provided instructions.");
+            System.out.println("Press Enter to continue (if needed).\n");
 
             //thread that handles message reception
             Thread.ofVirtual().start(() -> {
                 while (true) {
-
                     lockRunnig.lock();
                         if(!running[0]){
                             //thread does not need to run again
+                            
                             lockRunnig.unlock();
                             break;
                         }
@@ -204,6 +213,7 @@ public class Client {
                         lockReauth.unlock();
 
                         System.out.println("\nServer: " + response);
+
                     } catch (Exception e) {
                         lockRunnig.lock();
                         running[0] = false;
@@ -222,7 +232,7 @@ public class Client {
 
             //main thread sends the messages
             while (true) {
-                
+
                 try{
 
                     lockRunnig.lock();
@@ -240,6 +250,11 @@ public class Client {
                         if (!handleAuthentication(in, userInput, out)) {
                             isReauth[0] = false;
                             lockReauth.unlock();
+
+                            lockRunnig.lock();
+                            running[0] = false; 
+                            lockRunnig.unlock();
+
                             break;
                         }
                         isReauth[0] = false;
@@ -248,9 +263,15 @@ public class Client {
 
                     StringBuilder message = new StringBuilder();
 
+                    
                     //waits for the user input. Checks if the user is afk
                     if (!waitForUserInput(userInput, message, timeoutAfk)) {
                         System.out.println("Disconnected for being AFK.");
+
+                        lockRunnig.lock();
+                        running[0] = false; 
+                        lockRunnig.unlock();
+
                         break;
                     }
                     //check if the message is to exit the server
@@ -270,24 +291,34 @@ public class Client {
                     lockRunnig.lock();
                     running[0] = false; 
                     lockRunnig.unlock();
-                    throw e;
+
+                    lockReauth.lock();
+                    isReauth[0] = false;
+                    lockReauth.unlock();
+
+
+                    throw new Exception(e.getMessage());
                 } finally{
                     // always release the locks when a loop is completed to avoid blocked threads
                     if(lockRunnig.isHeldByCurrentThread())
-                            lockRunnig.unlock();
+                        lockRunnig.unlock();
                     if(lockReauth.isHeldByCurrentThread())
                         lockReauth.unlock();
                 }
             }
         }
         catch(Exception e){
-            throw e;
+            throw new Exception(e.getMessage());
         }finally{
-            running[0] = false;
+            lockRunnig.lock();
+            running[0] = false; 
+            lockRunnig.unlock();
+
+            lockReauth.lock();
+            isReauth[0] = false;
+            lockReauth.unlock();
+
             clientSocket.close();
-            in.close();
-            out.close();
-            userInput.close();
             System.out.println("Disconnected from server.");
         }
 
