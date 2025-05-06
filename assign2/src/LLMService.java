@@ -1,70 +1,130 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.List;
-import java.util.concurrent.locks.ReentrantLock;
+import java.io.*;
+import java.net.*;
+import java.util.*;
+import java.util.concurrent.locks.*;
+import java.util.stream.Collectors;
 
 public class LLMService {
-    private static final String OLLAMA_API_URL = "http://localhost:11434/api/generate";
+    private static final String OLLAMA_URL = "http://localhost:11434/api/generate";
     private final ReentrantLock lock = new ReentrantLock();
+    private String model = "llama3";
 
     public String getAIResponse(String prompt, List<String> conversationHistory) throws IOException {
         lock.lock();
         try {
-            StringBuilder context = new StringBuilder(prompt + "\n\nConversation History:\n");
-            for (String message : conversationHistory) {
-                context.append(message).append("\n");
+            if (!testConnection()) {
+                throw new IOException("Cannot connect to Ollama server");
             }
-            context.append("\nResponse:");
 
-            String jsonInput = String.format("""
-                {
-                    "model": "llama2",
-                    "prompt": "%s",
-                    "stream": false
+            StringBuilder context = new StringBuilder(prompt);
+            if (!conversationHistory.isEmpty()) {
+                context.append("\n\nConversation Context:");
+                for (String msg : conversationHistory) {
+                    context.append("\n").append(msg);
                 }
-                """, escapeJson(context.toString()));
+            }
 
-            HttpURLConnection connection = (HttpURLConnection) new URL(OLLAMA_API_URL).openConnection();
+            String jsonInput = String.format(
+                "{\"model\":\"%s\",\"prompt\":\"%s\",\"stream\":false}",
+                model,
+                escapeJson(buildFullPrompt(prompt, conversationHistory))
+            );
+
+            System.out.println("Sending to Ollama: " + jsonInput);
+
+            HttpURLConnection connection = (HttpURLConnection) new URL(OLLAMA_URL).openConnection();
             connection.setRequestMethod("POST");
-            connection.setRequestProperty("Content-Type", "application/json");
+            connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setConnectTimeout(10000); // 10 secs
+            connection.setReadTimeout(60000);    // 60 secs
             connection.setDoOutput(true);
 
-            try (OutputStreamWriter writer = new OutputStreamWriter(connection.getOutputStream())) {
+            try (OutputStream os = connection.getOutputStream();
+                 OutputStreamWriter writer = new OutputStreamWriter(os, "UTF-8")) {
                 writer.write(jsonInput);
+                writer.flush();
             }
 
-            if (connection.getResponseCode() == HttpURLConnection.HTTP_OK) {
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(connection.getInputStream()))) {
-                    StringBuilder response = new StringBuilder();
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        response.append(line);
+            int responseCode = connection.getResponseCode();
+            System.out.println("Ollama response code: " + responseCode);
+            
+            if (responseCode != 200) {
+                StringBuilder errorResponse = new StringBuilder();
+                try (BufferedReader err = new BufferedReader(
+                    new InputStreamReader(connection.getErrorStream()))) {
+                    String errorLine;
+                    while ((errorLine = err.readLine()) != null) {
+                        errorResponse.append(errorLine);
                     }
-                    return parseAIResponse(response.toString());
                 }
-            } else {
-                throw new IOException("LLM request failed with code: " + connection.getResponseCode());
+                System.err.println("Full error response: " + errorResponse.toString());
+                throw new IOException("HTTP error: " + responseCode + " - " + errorResponse.toString());
+            }
+
+            try (BufferedReader in = new BufferedReader(
+                new InputStreamReader(connection.getInputStream()))) {
+                StringBuilder response = new StringBuilder();
+                String line;
+                while ((line = in.readLine()) != null) {
+                    response.append(line);
+                }
+                System.out.println("Raw response: " + response);
+                return parseAIResponse(response.toString());
             }
         } finally {
             lock.unlock();
         }
     }
 
+    private boolean testConnection() {
+        try {
+            HttpURLConnection testConn = (HttpURLConnection) new URL(OLLAMA_URL)
+                .openConnection();
+            testConn.setRequestMethod("POST");
+            testConn.setRequestProperty("Content-Type", "application/json");
+            testConn.setConnectTimeout(3000);
+            // send empty JSON to test the endpoint
+            testConn.setDoOutput(true);
+            try (OutputStream os = testConn.getOutputStream()) {
+                os.write("{}".getBytes());
+            }
+            int responseCode = testConn.getResponseCode();
+            System.out.println("Connection test response: " + responseCode);
+            return responseCode < 500; // accept any non-server-error code
+        } catch (Exception e) {
+            System.err.println("Connection test failed: " + e.getMessage());
+            return false;
+        }
+    }
+
     private String escapeJson(String input) {
-        return input.replace("\"", "\\\"")
+        return input.replace("\\", "\\\\")
+                   .replace("\"", "\\\"")
                    .replace("\n", "\\n")
                    .replace("\r", "\\r")
                    .replace("\t", "\\t");
     }
 
     private String parseAIResponse(String jsonResponse) {
-        int startIdx = jsonResponse.indexOf("\"response\":\"") + 12;
-        int endIdx = jsonResponse.indexOf("\"", startIdx);
-        return jsonResponse.substring(startIdx, endIdx);
+        try {
+            int startIdx = jsonResponse.indexOf("\"response\":\"") + 12;
+            int endIdx = jsonResponse.indexOf("\"", startIdx);
+            return jsonResponse.substring(startIdx, endIdx);
+        } catch (Exception e) {
+            System.err.println("Failed to parse response: " + jsonResponse);
+            return "Error parsing AI response";
+        }
+    }
+
+    private String buildFullPrompt(String prompt, List<String> conversationHistory) {
+        StringBuilder fullPrompt = new StringBuilder(prompt);
+        if (!conversationHistory.isEmpty()) {
+            fullPrompt.append("\n\nContext:");
+            for (String msg : conversationHistory) {
+                fullPrompt.append("\n").append(msg);
+            }
+        }
+        return fullPrompt.toString();
     }
 }

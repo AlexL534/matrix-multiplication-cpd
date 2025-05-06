@@ -4,7 +4,6 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -15,7 +14,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public class Server {
 
     private int port;
-    private Map<Integer, String> chatRooms; //key = chat ID, value = chat name
+    private Map<Integer, ChatService.ChatRoomInfo> chatRooms; //key = chat ID, value = chat name
     private Map<String, String> authUsers; //key = user token, value = username
     private Map<String, PrintWriter> authSocket; //key = user token, value =  socket to connect with the authenticated user
     private Map<Integer, List<String>> roomsUsers;  //key= room id, value = list of user(token) in the room
@@ -446,11 +445,11 @@ public class Server {
             String botMessage = "Bot: " + aiResponse;
             conversation.add(botMessage);
             
-            sendMessageToChat(formattedMessage, roomId, token);
-            sendMessageToChat(botMessage, roomId, "BOT_TOKEN");
+            sendMessageToChat(formattedMessage, roomId, token, false);
+            sendMessageToChat(botMessage, roomId, "BOT_TOKEN", false);
         } catch (Exception e) {
-            System.err.println("Error processing AI message: " + e.getMessage());
-            sendMessageToChat("Error getting AI response", roomId, "SYSTEM");
+            System.err.println("LLM Error: " + e.getMessage());
+            sendMessageToChat("Bot is currently unavailable. Error: " + e.getMessage(), roomId, "SYSTEM", false);
         } finally {
             conversationLock.unlock();
         }
