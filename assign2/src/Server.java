@@ -29,6 +29,8 @@ public class Server {
     ReentrantLock roomsUsersLock;
     ReentrantLock authSocketLock;
 
+    private Connection connection;
+
     //constructor
     public Server(int port) throws Exception{
         this.port = port;
@@ -50,6 +52,8 @@ public class Server {
         userRoomLock = new ReentrantLock();
         roomsUsersLock = new ReentrantLock();
         authSocketLock = new ReentrantLock();
+
+        connection = new Connection();
     }
 
     public void start() throws IOException{
@@ -70,26 +74,17 @@ public class Server {
         }
     }
 
-    private void sendMessage(String message, PrintWriter out) throws Exception{
-        if(message.length() > 1024){
-            throw new Exception("Message is to large!");
-        }
-        out.println(message);
-    }
-    private String readResponse(BufferedReader in) throws IOException{
-        return in.readLine();
-    }
 
     private String authentication(BufferedReader in, PrintWriter out) throws Exception{
 
             String token = null;
             while(true){
-                this.sendMessage("Username: ", out);
-                String username = readResponse(in);
+                connection.sendMessage("Username: ", out);
+                String username = connection.readResponse(in);
                 if (username == null) throw new Exception("No Username.");
                 else username = username.trim();
-                this.sendMessage("Password: ", out);
-                String password = readResponse(in);
+                connection.sendMessage("Password: ", out);
+                String password = connection.readResponse(in);
                 if (password == null) throw new Exception("No Password.");
                 else password = password.trim();
 
@@ -112,9 +107,9 @@ public class Server {
                     break;
                 }
                 
-                this.sendMessage("Bad credentials. Try Again", out);
+                connection.sendMessage("Bad credentials. Try Again", out);
             }
-            this.sendMessage("Token:" + token, out);
+            connection.sendMessage("Token:" + token, out);
             out.flush();
 
             return token;
@@ -123,13 +118,13 @@ public class Server {
 
     private void sendRoomSelection(PrintWriter out) throws Exception{
         //add a flag for a multiline message
-        sendMessage(FLAG, out);
-        this.sendMessage("Available Rooms:", out);
+        connection.sendMessage(FLAG, out);
+        connection.sendMessage("Available Rooms:", out);
         for(Integer id : chatRooms.keySet()){
-            this.sendMessage(id.toString() +  ". " + chatRooms.get(id), out);
+            connection.sendMessage(id.toString() +  ". " + chatRooms.get(id), out);
         }
-        this.sendMessage("Enter room id to enter", out);
-        sendMessage(FLAG, out);
+        connection.sendMessage("Enter room id to enter", out);
+        connection.sendMessage(FLAG, out);
     }
 
     private void handleRoomSelection(PrintWriter out, String token, String selected ) throws Exception{
@@ -139,16 +134,16 @@ public class Server {
             selectedInteger = Integer.parseInt(selected);
         }
         catch(NumberFormatException e){
-            sendMessage("Please send a number!", out);
+            connection.sendMessage("Please send a number!", out);
             return;
         }
 
         if(selectedInteger < 0 || selectedInteger > chatRooms.size()){
-            sendMessage("Invalid ID: " + selectedInteger.toString() , out);
+            connection.sendMessage("Invalid ID: " + selectedInteger.toString() , out);
             return;
         }
 
-        sendMessage("Room: " + chatRooms.get(selectedInteger), out);
+        connection.sendMessage("Room: " + chatRooms.get(selectedInteger), out);
 
         userRoomLock.lock();
         try{
@@ -178,11 +173,18 @@ public class Server {
     }
 
     private void sendMessageToChat(String message, Integer roomId, String token){
+
+        //username of the user that is sending the message
+        authUserslock.lock();
+        String username = authUsers.get(token);
+        authUserslock.unlock();
+
         //send message to all the users in the chat
         for(String userToken : roomsUsers.get(roomId)){
-            if(userToken.equals(token)) continue; //skip the user that is sendinf the message
+            authSocketLock.lock();
             PrintWriter out = authSocket.get(userToken);
-            out.println(message);
+            authSocketLock.unlock();
+            out.println("[" + username +"]: " + message);
         }
     }
 
@@ -192,7 +194,7 @@ public class Server {
         BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
         PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
 
-        this.sendMessage("Welcome to the CPD Chat server", out);
+        connection.sendMessage("Welcome to the CPD Chat server", out);
 
         String token = null;
         try { 
@@ -201,9 +203,11 @@ public class Server {
         catch (Exception e){
             System.out.println(e.getMessage() + "\n" + "Client Disconnected.");
             clientSocket.close();
+            in.close();
+            out.close();
             return;
         } 
-        //TODO: Connection to chat room
+        //TODO: Connection to chat room AI
 
         String inputLine;
         Boolean isSendRooms = true;
@@ -221,7 +225,7 @@ public class Server {
                     } 
                     continue;
                 }
-                sendMessage("ERROR: Invalid format", out);
+                connection.sendMessage("ERROR: Invalid format", out);
                 continue;
             }
 
@@ -232,7 +236,7 @@ public class Server {
             authUserslock.lock();
             try {
                 if (!AuthService.isTokenValid(token) || !authUsers.containsKey(token)) {
-                    sendMessage("SESSION_EXPIRED", out);
+                    connection.sendMessage("SESSION_EXPIRED", out);
                     authUserslock.lock();
                     try {
                         authUsers.remove(token);
@@ -244,7 +248,7 @@ public class Server {
             }
             catch(Exception e){
                 System.err.println(e.getMessage());
-                sendMessage("Internal Server Error!", out);
+                connection.sendMessage("Internal Server Error!", out);
                 break;
             }
             finally {
@@ -268,7 +272,7 @@ public class Server {
                     }
                 } catch(Exception e){
                     System.err.println(e.getMessage());
-                    sendMessage("Internal Server Error!", out);
+                    connection.sendMessage("Internal Server Error!", out);
                     break;
                 }
             }
@@ -279,7 +283,7 @@ public class Server {
                 AuthService.refreshToken(token);
             } catch(Exception e){
                 System.err.println(e.getMessage());
-                sendMessage("Internal Server Error!", out);
+                connection.sendMessage("Internal Server Error!", out);
                 break;
             } finally{
                 authLock.unlock();
@@ -294,6 +298,8 @@ public class Server {
         }
 
         clientSocket.close();
+        in.close();
+        out.close();
 
         System.out.println("Client Disconnected!");
 

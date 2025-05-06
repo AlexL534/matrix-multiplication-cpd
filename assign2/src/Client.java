@@ -5,8 +5,6 @@ import java.io.PrintWriter;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 
 public class Client {
@@ -15,13 +13,14 @@ public class Client {
     private long timeoutServer = 60 * 1000; // Max await time for server response
     private int port;
     private String address;
-    private String authToken; //Similar to jwt token. The client service doesn't need to know the actual user information
+    private String authToken; //Similar to jwt token. The client service doesn't need to know the real user information
     private Socket clientSocket;
-    private final String FLAG = "::";
+    private Connection connection;
 
     public Client(int port, String address){
         this.port = port;
         this.address = address;
+        connection = new Connection();
     }
 
     public void start() throws UnknownHostException, IOException{
@@ -29,56 +28,15 @@ public class Client {
         System.out.println("Client started socket in address " + address + " and port " + port);
     }
 
-    private String readResponseWithTimeout(BufferedReader in, long timeoutMillis) throws IOException {
-        final ReentrantLock lock = new ReentrantLock();
-        final Condition responseReceived = lock.newCondition();
-        final StringBuilder result = new StringBuilder();
-        final AtomicBoolean isResponseReady = new AtomicBoolean(false);
-
-        Thread t = Thread.ofVirtual().start(() -> {
-            try {
-                String line = in.readLine();
-                lock.lock();
-                try {
-                    if (line != null) {
-                        result.append(line);
-                        isResponseReady.set(true); // update the shared flag
-                        responseReceived.signal(); // notify the main thread
-                    }
-                } finally {
-                    lock.unlock();
-                }
-            } catch (IOException ignored) {}
-        });
-
-        lock.lock();
-        try {
-            while (!isResponseReady.get()) {
-                boolean received = responseReceived.await(timeoutMillis, TimeUnit.MILLISECONDS);
-                if (!received && !isResponseReady.get()) {
-                    throw new IOException("Timed out waiting for server response.");
-                }
-            }
-        } catch (InterruptedException e) {
-            throw new IOException("Interrupted while waiting for server response.", e);
-        } finally {
-            lock.unlock();
-        }
-        return result.toString();
-    }
-
-    private void sendMessage(String message, PrintWriter out) throws Exception{
-        if(message.length() > 1024){
-            throw new Exception("Message is too large!");
-        }
-        out.println(message);
-    }
-
+    
     private boolean waitForUserInput(BufferedReader reader, StringBuilder target, long timeoutMillis) throws IOException {
         final ReentrantLock lock = new ReentrantLock();
         final Condition inputAvailable = lock.newCondition();
+
+        final ReentrantLock lockDone = new ReentrantLock();
+        final ReentrantLock lockIsResponsible = new ReentrantLock();
         final boolean[] done = new boolean[]{false};
-        final AtomicBoolean isResponseReady = new AtomicBoolean(false);
+        final boolean[] isResponseReady = new boolean[]{false};
 
         Thread t = Thread.ofVirtual().start(() -> {
             try {
@@ -87,7 +45,6 @@ public class Client {
                 try {
                     if (line != null) {
                         target.setLength(0);
-                        isResponseReady.set(true); // update the shared flag
 
                         //filters the : character as it is used as a flag and separator in the message protocol
                         if(line.contains(":")){
@@ -96,54 +53,81 @@ public class Client {
                         }
                         
                         target.append(line);
+
+                        lockIsResponsible.lock();
+                        isResponseReady[0] = true; // update the shared flag
+                        lockIsResponsible.unlock();
                     }
+
+                    lockDone.lock();
                     done[0] = true;
+                    lockDone.unlock();
+
                     inputAvailable.signal(); // Notify the main thread
                 } finally {
                     lock.unlock();
+                    if(lockIsResponsible.isHeldByCurrentThread()){
+                        lockIsResponsible.unlock();
+                    }
+                    if(lockDone.isHeldByCurrentThread()){
+                        lockDone.unlock();
+                    }
                 }
             } catch (IOException ignored) {}
         });
 
         lock.lock();
         try {
-            while (!isResponseReady.get()) {
+            while (!isResponseReady[0]) {
                 boolean gotInput = inputAvailable.await(timeoutMillis, java.util.concurrent.TimeUnit.MILLISECONDS);
-                if (!gotInput && !isResponseReady.get()) {
-                    throw new IOException("Timed out waiting for user inout.");
+
+                lockIsResponsible.lock();
+                if (!gotInput && !isResponseReady[0]) {
+                    throw new IOException("Timed out waiting for user input.");
                 }
-                
+                lockIsResponsible.unlock();
             }
-            return done[0];
+
+            lockDone.lock();
+            boolean isDone = done[0];
+            lockDone.unlock();
+
+            return isDone;
             
         } catch (InterruptedException e) {
             throw new IOException("Interrupted while waiting for user input.");
         } finally {
             lock.unlock();
+            if(lockIsResponsible.isHeldByCurrentThread()){
+                lockIsResponsible.unlock();
+            }
+            if(lockDone.isHeldByCurrentThread()){
+                lockDone.unlock();
+            }
         }
     }
 
     private boolean handleAuthentication(BufferedReader in, BufferedReader userInput, PrintWriter out) throws Exception {
         while (true) {
-            System.out.println(readResponseWithTimeout(in, timeoutServer));
+            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
 
             StringBuilder username = new StringBuilder();
             if (!waitForUserInput(userInput, username, timeoutAfk)) {
                 System.out.println("Disconnected: Timed out waiting for username.");
                 return false;
             }
-            sendMessage(username.toString(), out);
+            connection.sendMessage(username.toString(), out);
 
-            System.out.println(readResponseWithTimeout(in, timeoutServer));
+            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
 
             StringBuilder password = new StringBuilder();
             if (!waitForUserInput(userInput, password, timeoutAfk)) {
                 System.out.println("Disconnected: Timed out waiting for password.");
                 return false;
             }
-            sendMessage(password.toString(), out);
+            connection.sendMessage(password.toString(), out);
 
-            String message = readResponseWithTimeout(in, timeoutServer);
+            String message = connection.readResponseWithTimeout(in, timeoutServer);
             String[] tokenInfo = message.split(":");
             if (tokenInfo.length == 2) {
                 this.authToken = tokenInfo[1];
@@ -164,93 +148,142 @@ public class Client {
         }
     }
 
-    private String readMultilineMessage(BufferedReader in) throws Exception {
-        StringBuilder response = new StringBuilder();
-            String line = "";
-            try{
-                line = readResponseWithTimeout(in, timeoutServer);
-            } catch (Exception e){
-                System.err.println(e.getMessage());
-                clientSocket.close();
-                throw new Exception("Could not connect to the server");
-            }
-
-            if(!line.equals(FLAG)){
-                //is not a multiline
-                
-                return line;
-            }
-
-            //get the rest of the message if it
-            while(true){
-                try{
-                    line = readResponseWithTimeout(in, timeoutServer);
-                } catch (Exception e){
-                    System.err.println(e.getMessage());
-                    clientSocket.close();
-                    throw new Exception("Could not connect to the server");
-                }
-                if(line.equals(FLAG)){
-                    break;
-                }
-                response.append(line).append('\n');
-                
-            }
-        return response.toString();
-    }
 
     public void run() throws Exception {
         BufferedReader in = new BufferedReader(new InputStreamReader(this.clientSocket.getInputStream()));
         PrintWriter out = new PrintWriter(this.clientSocket.getOutputStream(), true);
         BufferedReader userInput = new BufferedReader(new InputStreamReader(System.in));
 
-        System.out.println(readResponseWithTimeout(in, timeoutServer));
+        //locks to help prevent concurrency when accessing the variables that help the two threads to syncronize
+        final ReentrantLock lockRunnig = new ReentrantLock();
+        final ReentrantLock lockReauth = new ReentrantLock();
 
-        if (!handleAuthentication(in, userInput, out)) {
-            clientSocket.close();
-            return;
-        }
+        final boolean[] running = new boolean[]{true}; //used to control the execution of the message rection thread
+        final boolean[] isReauth = new boolean[]{false}; //used to control the execution of the message rection thread
 
-        while (true) {
-            System.out.print("Enter message (or 'exit' to quit): ");
-            StringBuilder message = new StringBuilder();
+        try{
+            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
 
-            //waits for the user input. Checks if the user is afk
-
-            if (!waitForUserInput(userInput, message, timeoutAfk)) {
-                System.out.println("Disconnected for being AFK.");
-                break;
-            }
-            //check if the message is to exit the server
-            if (message.toString().equalsIgnoreCase("exit")) {
-                break;
+            if (!handleAuthentication(in, userInput, out)) {
+                clientSocket.close();
+                return;
             }
 
-            if(message.isEmpty()){
-                message.append("next"); // Empty message. Send a dummy next message to procede (this usually happens when the user clicks enter)
-            }
+            System.out.print("Enter message (or 'exit' to quit)");
 
-            sendMessage(authToken + ":" + message.toString(), out);
+            //thread that handles message reception
+            Thread t = Thread.ofVirtual().start(() -> {
+                while (true) {
 
-            //read the server response. Supports multiline messages (start and end with a flag)
-            String response = readMultilineMessage(in);
+                    lockRunnig.lock();
+                        if(!running[0]){
+                            //thread does not need to run again
+                            lockRunnig.unlock();
+                            break;
+                        }
+                    lockRunnig.unlock();
+                    
+                    try {
+                        //Check if is reauth. Wait until the auth is finnished
+                        lockReauth.lock();
+                        if(isReauth[0]){
+                            lockReauth.unlock();
+                            continue;
+                        }
+                        lockReauth.unlock();
 
+                        //read the server response. Supports multiline messages (start and end with a flag)
+                        String response = connection.readMultilineMessage(in);
 
-            //session expired. Needs to reauth
-            if (response.toString().equals("SESSION_EXPIRED")) {
-                System.out.println("Session expired. Please reauthenticate.");
-                sendMessage("REAUTH", out);
-                if (!handleAuthentication(in, userInput, out)) {
-                    break;
+                        //session expired. Needs to reauth
+                        lockReauth.lock();
+                        if (response.toString().equals("SESSION_EXPIRED")) {
+                            isReauth[0] = true; //activate the flag. The authentication will procede in the main thread  
+                            continue;
+                        }
+                        lockReauth.unlock();
+
+                        System.out.println("\nServer: " + response);
+                    } catch (Exception e) {
+                        lockRunnig.lock();
+                        running[0] = false;
+                        lockRunnig.unlock();
+                        e.printStackTrace();
+                        break;
+                    }finally{
+                        // always release the locks when a loop is completed to avoid blocked threads
+                        if(lockRunnig.isHeldByCurrentThread())
+                            lockRunnig.unlock();
+                        if(lockReauth.isHeldByCurrentThread())
+                            lockReauth.unlock();
+                    }
                 }
-                continue;
-            }
+            });
 
-            System.out.println("\nServer: " + response);
+            //main thread sends the messages
+            while (true) {
+                
+                try{
+
+                    lockReauth.lock();
+                    if(isReauth[0]){
+                        System.out.println("Session expired. Please reauthenticate.");
+                        connection.sendMessage("REAUTH", out);
+                        if (!handleAuthentication(in, userInput, out)) {
+                            isReauth[0] = false;
+                            lockReauth.unlock();
+                            break;
+                        }
+                        isReauth[0] = false;
+                    }
+                    lockReauth.unlock();
+
+                    StringBuilder message = new StringBuilder();
+
+                    //waits for the user input. Checks if the user is afk
+                    if (!waitForUserInput(userInput, message, timeoutAfk)) {
+                        System.out.println("Disconnected for being AFK.");
+                        break;
+                    }
+                    //check if the message is to exit the server
+                    if (message.toString().equalsIgnoreCase("exit")) {
+                        lockRunnig.lock();
+                        running[0] = false;            
+                        lockRunnig.unlock();       
+                        break;
+                    }
+
+                    if(message.isEmpty()){
+                        message.append("next"); // Empty message. Send a dummy next message to procede (this usually happens when the user clicks enter)
+                    }
+
+                    connection.sendMessage(authToken + ":" + message.toString(), out);
+                } catch(Exception e){
+                    lockRunnig.lock();
+                    running[0] = false; 
+                    lockRunnig.unlock();
+                    throw e;
+                } finally{
+                    // always release the locks when a loop is completed to avoid blocked threads
+                    if(lockRunnig.isHeldByCurrentThread())
+                            lockRunnig.unlock();
+                    if(lockReauth.isHeldByCurrentThread())
+                        lockReauth.unlock();
+                }
+            }
+        }
+        catch(Exception e){
+            throw e;
+        }finally{
+            running[0] = false;
+            clientSocket.close();
+            in.close();
+            out.close();
+            userInput.close();
+            System.out.println("Disconnected from server.");
         }
 
-        clientSocket.close();
-        System.out.println("Disconnected from server.");
+        
     }
 
     public static void main(String[] args) throws Exception {
