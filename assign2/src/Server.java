@@ -170,9 +170,11 @@ public class Server {
         finally{
             roomsUsersLock.unlock();
         }
+
+        sendMessageToChat(" joined the Room", selectedInteger, token, true);
     }
 
-    private void sendMessageToChat(String message, Integer roomId, String token){
+    private void sendMessageToChat(String message, Integer roomId, String token, boolean isInfoMessage){
 
         //username of the user that is sending the message
         authUserslock.lock();
@@ -184,7 +186,13 @@ public class Server {
             authSocketLock.lock();
             PrintWriter out = authSocket.get(userToken);
             authSocketLock.unlock();
-            out.println("[" + username +"]: " + message);
+            if(isInfoMessage){
+                //user is conneted/disconnected message
+                out.println(username + message);
+            }else{
+                out.println("[" + username +"]: " + message);
+            }
+           
         }
     }
 
@@ -212,7 +220,7 @@ public class Server {
         String inputLine;
         Boolean isSendRooms = true;
         
-        while ((inputLine = in.readLine()) != null) {
+        while ((inputLine = connection.readResponse(in)) != null) {
             String[] parts = inputLine.split(":");
             if (parts.length < 2) {
                 if (inputLine.equals("REAUTH")) {
@@ -258,7 +266,17 @@ public class Server {
             //If the user is in a room, send the message to the other users. Else, send the rooms available to connect
             if(userRoom.containsKey(token)){
                 //send the message to the other
-                sendMessageToChat(message, userRoom.get(token), token);
+                Integer roomID = -1;
+                userRoomLock.lock();
+                try{
+                    roomID = userRoom.get(token);
+                }
+                catch(Exception e){
+                    throw e;
+                } finally{
+                    userRoomLock.unlock();
+                }
+                sendMessageToChat(message, roomID, token, false);
             }
             else{
                 //show the available rooms
@@ -294,6 +312,27 @@ public class Server {
         
         //remove user from server before closing connection
         if(token != null){
+
+            //first send the message to all the room users warn about the disconnection
+            Integer roomID = -1;
+            userRoomLock.lock();
+            try{
+                if(userRoom.containsKey(token)){
+                    roomID = userRoom.get(token);
+                }
+                    
+            }
+            catch(Exception e){
+                throw e;
+            } finally{
+                userRoomLock.unlock();
+            }
+
+            if(!roomID.equals(-1)){
+                sendMessageToChat(" left the room", roomID, token, true);
+            }
+
+
             disconnectUser(token); //disconnects the user from all the server's datastructures
         }
 

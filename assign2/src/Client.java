@@ -38,7 +38,7 @@ public class Client {
         final boolean[] done = new boolean[]{false};
         final boolean[] isResponseReady = new boolean[]{false};
 
-        Thread t = Thread.ofVirtual().start(() -> {
+        Thread.ofVirtual().start(() -> {
             try {
                 String line = reader.readLine();
                 lock.lock();
@@ -172,7 +172,7 @@ public class Client {
             System.out.print("Enter message (or 'exit' to quit)");
 
             //thread that handles message reception
-            Thread t = Thread.ofVirtual().start(() -> {
+            Thread.ofVirtual().start(() -> {
                 while (true) {
 
                     lockRunnig.lock();
@@ -224,6 +224,14 @@ public class Client {
             while (true) {
                 
                 try{
+
+                    lockRunnig.lock();
+                        if(!running[0]){
+                            //econdary thread is not running. Can exit the loop in the main thread
+                            lockRunnig.unlock();
+                            break;
+                        }
+                    lockRunnig.unlock();
 
                     lockReauth.lock();
                     if(isReauth[0]){

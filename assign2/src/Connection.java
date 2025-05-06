@@ -29,7 +29,7 @@ public class Connection {
         final ReentrantLock lockIsResponsible = new ReentrantLock();
         final boolean[] isResponseReady = new boolean[]{false};
 
-        Thread t = Thread.ofVirtual().start(() -> {
+        Thread.ofVirtual().start(() -> {
             try {
                 String line = in.readLine();
                 lock.lock();
