@@ -168,11 +168,7 @@ public class Client {
             System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
 
             //Choices message
-            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
-            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
-            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
-            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
-            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+            System.out.println(connection.readMultilineMessage(in));
 
             StringBuilder choice = new StringBuilder();
             if (!waitForUserInput(userInput, choice, timeoutAfk)) {
@@ -197,14 +193,6 @@ public class Client {
                 }
                 connection.sendMessage(token.toString(), out);
                 this.authToken = token.toString();
-
-                System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
-                
-                String isInRoom = connection.readResponseWithTimeout(in, timeoutServer);
-
-                if (isInRoom.equals("true")){
-                    System.out.println("\nReconnected to room: " + connection.readResponseWithTimeout(in, timeoutServer));
-                }
 
                 System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
                 
