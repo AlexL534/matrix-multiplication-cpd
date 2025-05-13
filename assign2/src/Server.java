@@ -212,7 +212,7 @@ public class Server {
             //insert the new room into the chat rooms list
             chatRoomsLock.lock();
             try{
-                chatRooms.put(id, responseInfo[1]);
+                chatRooms.put(id, new ChatService.ChatRoomInfo(responseInfo[1], false));
             } catch(Exception e){
                 throw new Exception(e);
             }finally{
@@ -366,7 +366,7 @@ public class Server {
 
                         // Notify the client of the room they are rejoining
                         connection.sendMessage("true", out);
-                        connection.sendMessage(chatRooms.get(roomId), out);
+                        connection.sendMessage(chatRooms.get(roomId).toString(), out);
 
                         // Add the user back to the room's user list
                         roomsUsersLock.lock();
