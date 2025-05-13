@@ -67,7 +67,6 @@ public class LLMService {
                 while ((line = in.readLine()) != null) {
                     response.append(line);
                 }
-                System.out.println("Raw response: " + response);
                 return parseAIResponse(response.toString());
             }
         } finally {
