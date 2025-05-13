@@ -168,7 +168,11 @@ public class Client {
             System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
 
             //Choices message
-            System.out.println(connection.readMultilineMessage(in));
+            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
 
             StringBuilder choice = new StringBuilder();
             if (!waitForUserInput(userInput, choice, timeoutAfk)) {
@@ -193,7 +197,16 @@ public class Client {
                 }
                 connection.sendMessage(token.toString(), out);
                 this.authToken = token.toString();
+    
                 //still need the reconnect of the room
+
+                String isInRoom = connection.readResponseWithTimeout(in, timeoutServer);
+
+                if (isInRoom == "true"){
+                    //System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+                }
+
+
                 
             } else {
                 clientSocket.close();
@@ -265,7 +278,7 @@ public class Client {
 
                     lockRunnig.lock();
                         if(!running[0]){
-                            //econdary thread is not running. Can exit the loop in the main thread
+                            //Secondary thread is not running. Can exit the loop in the main thread
                             lockRunnig.unlock();
                             break;
                         }
