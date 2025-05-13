@@ -205,8 +205,45 @@ public class Server {
         connection.sendMessage("Welcome to the CPD Chat server", out);
 
         String token = null;
-        try { 
-            token = this.authentication(in, out);
+        boolean isReconnected = false;
+        try {
+            //start the authentication process
+            connection.sendMessage("Options: ", out);
+            connection.sendMessage("1. Authenticate", out);
+            connection.sendMessage("2. Reconnect", out);
+            connection.sendMessage("3. Exit", out);
+            connection.sendMessage("Select an option: ", out); 
+
+            String option = connection.readResponse(in);
+            if (option.equals("3")) {
+                connection.sendMessage("Bye!", out);
+                clientSocket.close();
+                in.close();
+                out.close();
+                return;
+            }
+            else if(option.equals("2")){
+                connection.sendMessage("Token: ", out);
+                token = connection.readResponse(in);
+                for (String userToken : authUsers.keySet()){
+                    if(userToken.equals(token)){
+                        break;
+                    }
+                }
+                connection.sendMessage("Reconnected: " + authUsers.get(token), out);
+                isReconnected = true;
+            }
+            else if(option.equals("1")){
+                token = this.authentication(in, out);
+                System.out.println("Token auth: " + token);
+            }
+            else{
+                connection.sendMessage("Invalid option", out);
+                clientSocket.close();
+                in.close();
+                out.close();
+                return;
+            }
         }
         catch (Exception e){
             System.out.println(e.getMessage() + "\n" + "Client Disconnected.");
@@ -218,7 +255,7 @@ public class Server {
         //TODO: Connection to chat room AI
 
         String inputLine;
-        Boolean isSendRooms = true;
+        Boolean isSendRooms = isReconnected ? false : true;
         
         while ((inputLine = connection.readResponse(in)) != null) {
             String[] parts = inputLine.split(":");
