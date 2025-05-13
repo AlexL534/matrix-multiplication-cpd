@@ -30,8 +30,9 @@ public class Server {
     ReentrantLock authUserslock;    //Used when accessing the authUser map
     ReentrantLock chatRoomsLock;    //Used when accessing the chatRoom map
     ReentrantLock userRoomLock;    //Used when accessing the userRoom map
-    ReentrantLock roomsUsersLock;
-    ReentrantLock authSocketLock;
+    ReentrantLock roomsUsersLock;  //Used when accessing the rooms user map
+    ReentrantLock authSocketLock;  //Used when accessing the auth socket map
+    ReentrantLock chatServiceLock; //Used when accessing the chat service to create and fetch chats rooms
 
     private Connection connection;
 
@@ -56,6 +57,7 @@ public class Server {
         userRoomLock = new ReentrantLock();
         roomsUsersLock = new ReentrantLock();
         authSocketLock = new ReentrantLock();
+        chatServiceLock = new ReentrantLock();
 
         connection = new Connection();
     }
@@ -127,7 +129,10 @@ public class Server {
         for(Integer id : chatRooms.keySet()){
             connection.sendMessage(id.toString() +  ". " + chatRooms.get(id), out);
         }
-        connection.sendMessage("Enter room id to enter", out);
+        //special selections
+        connection.sendMessage("a. Create a new room", out);
+
+        connection.sendMessage("Enter room id to enter or letter to select a special option", out);
         connection.sendMessage(FLAG, out);
     }
 
@@ -178,6 +183,62 @@ public class Server {
         sendMessageToChat(" joined the Room", selectedInteger, token, true);
     }
 
+    private void handleRoomCreation(BufferedReader in, PrintWriter out, String token) throws Exception{
+        while(true){
+            connection.sendMessage("Please enter the chat name:", out);
+            String response = connection.readResponse(in);
+            String[] responseInfo = response.split(":");
+
+            if(!verifyToken(out, token)){
+                //invalid token. Needs reauth
+                return;
+            }
+
+            boolean isCreated = false;
+            int  id = 0;
+
+            //create the chat and get it's id
+            chatServiceLock.lock();
+            try{
+                isCreated =  ChatService.createChat(responseInfo[1]);
+                id = ChatService.getRoomIdByName(responseInfo[1]);
+            } catch(Exception e){
+                throw new Exception(e);
+            }
+            finally{
+                chatServiceLock.unlock();
+            }
+
+            //insert the new room into the chat rooms list
+            chatRoomsLock.lock();
+            try{
+                chatRooms.put(id, responseInfo[1]);
+            } catch(Exception e){
+                throw new Exception(e);
+            }finally{
+                chatRoomsLock.unlock();
+            }
+
+            //insert the new room into the room users map
+            roomsUsersLock.lock();
+            try{
+                roomsUsers.put(id, new ArrayList<>());
+            } catch(Exception e){
+                throw new Exception(e);
+            }finally{
+                roomsUsersLock.unlock();
+            }
+
+            if(isCreated){
+                connection.sendMessage("New Chat room created successfully. Press Enter to continue", out);
+                break;
+            }
+
+            connection.sendMessage("Name is already used. Press Enter to continue", out);
+            response = connection.readResponse(in);
+        }
+    }
+
     private void sendMessageToChat(String message, Integer roomId, String token, boolean isInfoMessage){
 
         //username of the user that is sending the message
@@ -200,7 +261,48 @@ public class Server {
         }
     }
 
+    private boolean verifyToken(PrintWriter out, String token) throws Exception{
+         // check if token is valid
+            authUserslock.lock();
+            try {
+                if (!AuthService.isTokenValid(token) || !authUsers.containsKey(token)) {
+                    connection.sendMessage("SESSION_EXPIRED", out);
+                    authUserslock.lock();
+                    try {
+                        authUsers.remove(token);
+                        return false;
+                    } finally {
+                        authUserslock.unlock();
+                    }
+                }
+            }
+            catch(Exception e){
+                System.err.println(e.getMessage());
+                connection.sendMessage("Internal Server Error!", out);
+                return false;
+            }
+            finally {
+                authUserslock.unlock();
+            }
+        return true;
+    }
+
+    private void refreshToken(PrintWriter out, String token) throws Exception{
+        authLock.lock();
+            try{
+                AuthService.refreshToken(token);
+            } catch(Exception e){
+                System.err.println(e.getMessage());
+                connection.sendMessage("Internal Server Error!", out);
+            } finally{
+                authLock.unlock();
+            }
+    }
+
     private void handleClients(Socket clientSocket) throws Exception{
+        ClientState state = ClientState.RECONECT_MENU;//state of the client. Starts with the reconect menu
+
+
         System.out.println("Connected Client");
 
         BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
@@ -209,8 +311,98 @@ public class Server {
         connection.sendMessage("Welcome to the CPD Chat server", out);
 
         String token = null;
-        try { 
-            token = this.authentication(in, out);
+        try {
+            //TODO: Reconect logic should be in another function. It should verify if the current state is reconect_menu
+            //start the authentication process
+            connection.sendMessage(FLAG, out);
+            connection.sendMessage("Options: ", out);
+            connection.sendMessage("1. Authenticate", out);
+            connection.sendMessage("2. Reconnect", out);
+            connection.sendMessage("3. Exit", out);
+            connection.sendMessage("Select an option: ", out); 
+            connection.sendMessage(FLAG, out);
+
+            String option = connection.readResponse(in);
+            if (option.equals("3")) {
+                connection.sendMessage("Bye!", out);
+                clientSocket.close();
+                in.close();
+                out.close();
+                return;
+            }
+           else if (option.equals("2")) {
+                connection.sendMessage("Token: ", out);
+                token = connection.readResponse(in);
+
+                boolean isValid = false;
+                boolean isInRoom = false;
+
+                // Check if the token is valid
+                authUserslock.lock();
+                try {
+                    if (authUsers.containsKey(token)) {
+                        isValid = true;
+                    }
+                } finally {
+                    authUserslock.unlock();
+                }
+
+                if (!isValid) {
+                    connection.sendMessage("Token not found", out);
+                    clientSocket.close();
+                    in.close();
+                    out.close();
+                    return;
+                }
+
+                connection.sendMessage("Reconnected: " + authUsers.get(token), out);
+
+                // Check if the user is in a room
+                userRoomLock.lock();
+                try {
+                    if (userRoom.containsKey(token)) {
+                        isInRoom = true;
+                        Integer roomId = userRoom.get(token);
+
+                        // Notify the client of the room they are rejoining
+                        connection.sendMessage("true", out);
+                        connection.sendMessage(chatRooms.get(roomId), out);
+
+                        // Add the user back to the room's user list
+                        roomsUsersLock.lock();
+                        try {
+                            List<String> users = roomsUsers.get(roomId);
+                            users.remove(token); // Remove the user if they are already in the list
+                            users.add(token); // Add the user back to the list
+                            roomsUsers.replace(roomId, users);
+                            userRoom.replace(token, roomId);
+                        } finally {
+                            roomsUsersLock.unlock();
+                        }
+
+                        // Notify other users in the room
+                        sendMessageToChat(" reconnected to the room", roomId, token, true);
+
+                    } else {
+                        connection.sendMessage("false", out);
+                    }
+                } finally {
+                    userRoomLock.unlock();
+                }
+            }
+            else if(option.equals("1")){
+                state = ClientState.AUTHENTICATE;
+                token = this.authentication(in, out);
+                state = ClientState.CHATS_MENU;
+                System.out.println("Token auth: " + token);
+            }
+            else{
+                connection.sendMessage("Invalid option", out);
+                clientSocket.close();
+                in.close();
+                out.close();
+                return;
+            }
         }
         catch (Exception e){
             System.out.println(e.getMessage() + "\n" + "Client Disconnected.");
@@ -224,15 +416,18 @@ public class Server {
         String inputLine;
         Boolean isSendRooms = true;
         
-        while ((inputLine = connection.readResponse(in)) != null) {
+        while ((inputLine = connection.readResponse(in)) != null && state != ClientState.EXIT) {
             String[] parts = inputLine.split(":");
             if (parts.length < 2) {
                 if (inputLine.equals("REAUTH")) {
                     try { // restart auth flow
-                      this.authentication(in, out);
+                        state = ClientState.AUTHENTICATE;
+                        this.authentication(in, out);
+                        state = ClientState.CHATS_MENU;
                     }
                     catch (Exception e){
                       System.out.println(e.getMessage());
+                      state = ClientState.EXIT;
                       break;
                     } 
                     continue;
@@ -244,36 +439,23 @@ public class Server {
             token = parts[0];
             String message = parts[1];
 
-            // check if token is valid
-            authUserslock.lock();
-            try {
-                if (!AuthService.isTokenValid(token) || !authUsers.containsKey(token)) {
-                    connection.sendMessage("SESSION_EXPIRED", out);
-                    authUserslock.lock();
-                    try {
-                        authUsers.remove(token);
-                    } finally {
-                        authUserslock.unlock();
-                    }
-                    continue;
-                }
-            }
-            catch(Exception e){
-                System.err.println(e.getMessage());
-                connection.sendMessage("Internal Server Error!", out);
-                break;
-            }
-            finally {
-                authUserslock.unlock();
+            if(!verifyToken(out, token)){
+                //the token is not valid. Continue to read the next message (possibly reauth) 
+                continue;
             }
 
             //If the user is in a room, send the message to the other users. Else, send the rooms available to connect
-            if (userRoom.containsKey(token)) {
+            if(state == ClientState.CHAT){
+                //send the message to the other
                 Integer roomID = -1;
                 userRoomLock.lock();
                 try {
                     roomID = userRoom.get(token);
-                } finally {
+                }
+                catch(Exception e){
+                    state = ClientState.EXIT;
+                    throw e;
+                } finally{
                     userRoomLock.unlock();
                 }
 
@@ -284,7 +466,7 @@ public class Server {
                     sendMessageToChat(message, roomID, token, false);
                 }
             }
-            else {
+            else if(state == ClientState.CHATS_MENU){
                 //show the available rooms
                 try{
                     if(isSendRooms){
@@ -292,30 +474,39 @@ public class Server {
                         isSendRooms = false;
                     }
                     else{
-                        handleRoomSelection(out, token, message);
+                        //message could be a special option (are identified by a letter)
+                        if(message.matches("[a-zA-Z]")){
+                            
+                            if(message.equals("a")){
+                                //user selected the create room option
+                                state = ClientState.CREATE_CHAT;
+                                handleRoomCreation(in, out, token);
+                                state = ClientState.CHATS_MENU;
+                                isSendRooms = true; //need to send the rooms again
+                            }
+
+                        }
+                        else{
+                            //no special option is possible. Handle normal room selection
+                            handleRoomSelection(out, token, message);
+                            state = ClientState.CHAT;
+                        }
+                        
+                        
                     }
                 } catch(Exception e){
                     System.err.println(e.getMessage());
                     connection.sendMessage("Internal Server Error!", out);
+                    state = ClientState.EXIT;
                     break;
                 }
             }
 
-
-            authLock.lock();
-            try{
-                AuthService.refreshToken(token);
-            } catch(Exception e){
-                System.err.println(e.getMessage());
-                connection.sendMessage("Internal Server Error!", out);
-                break;
-            } finally{
-                authLock.unlock();
-            }
-            
+            //the user sent a response so the token can be refreshed
+            refreshToken(out, token);
             
         }
-        
+
         //remove user from server before closing connection
         if(token != null){
 

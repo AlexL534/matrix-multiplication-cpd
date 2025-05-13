@@ -167,33 +167,69 @@ public class Client {
             //Welcome message
             System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
 
-            //authentication
-            if (!handleAuthentication(in, userInput, out)) {
-                clientSocket.close();
+            //Choices message
+            System.out.println(connection.readMultilineMessage(in));
+
+            StringBuilder choice = new StringBuilder();
+            if (!waitForUserInput(userInput, choice, timeoutAfk)) {
+                System.out.println("Disconnected: Timed out waiting for username.");
                 return;
             }
 
-            //usage instructions that appear before the room options
-            System.out.println("\nUsage instructions:");
-            System.out.println("    - Enter a message to interact with the server;");
-            System.out.println("    - Enter 'exit' at any time to quit the server;");
-            System.out.println("    - When some special input is asked, please use the provided instructions.");
-            System.out.println("Press Enter to continue (if needed).\n");
+            connection.sendMessage(choice.toString(), out);
+
+            if (choice.toString().equals("1")) {
+                //authentication
+                if (!handleAuthentication(in, userInput, out)) {
+                    clientSocket.close();
+                    return;
+                }
+            } else if (choice.toString().equals("2")) {
+                System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+                StringBuilder token = new StringBuilder();
+                if (!waitForUserInput(userInput, token, timeoutAfk)) {
+                    System.out.println("Disconnected: Timed out waiting for token.");
+                    return;
+                }
+                connection.sendMessage(token.toString(), out);
+                this.authToken = token.toString();
+
+                System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+                
+                String isInRoom = connection.readResponseWithTimeout(in, timeoutServer);
+
+                if (isInRoom.equals("true")){
+                    System.out.println("\nReconnected to room: " + connection.readResponseWithTimeout(in, timeoutServer));
+                }
+                
+            } else {
+                clientSocket.close();
+                System.out.println("Disconnecting...");
+                return;
+            }
+
+            if (!choice.toString().equals("2")) {
+                System.out.println("\nUsage instructions:");
+                System.out.println("    - Enter a message to interact with the server;");
+                System.out.println("    - Enter 'exit' at any time to quit the server;");
+                System.out.println("    - When some special input is asked, please use the provided instructions.");
+                System.out.println("Press Enter to continue (if needed).\n");
+            }
 
             //thread that handles message reception
             Thread.ofVirtual().start(() -> {
                 while (true) {
+
                     lockRunnig.lock();
                         if(!running[0]){
                             //thread does not need to run again
-                            
                             lockRunnig.unlock();
                             break;
                         }
                     lockRunnig.unlock();
                     
                     try {
-                        //Check if is reauth. Wait until the auth is finnished
+                        //Check if is reauth. Wait until the auth is finished
                         lockReauth.lock();
                         if(isReauth[0]){
                             lockReauth.unlock();
@@ -207,7 +243,8 @@ public class Client {
                         //session expired. Needs to reauth
                         lockReauth.lock();
                         if (response.toString().equals("SESSION_EXPIRED")) {
-                            isReauth[0] = true; //activate the flag. The authentication will procede in the main thread  
+                            isReauth[0] = true; //activate the flag. The authentication will proceed in the main thread
+                            lockReauth.unlock();
                             continue;
                         }
                         lockReauth.unlock();
@@ -237,7 +274,7 @@ public class Client {
 
                     lockRunnig.lock();
                         if(!running[0]){
-                            //econdary thread is not running. Can exit the loop in the main thread
+                            //Secondary thread is not running. Can exit the loop in the main thread
                             lockRunnig.unlock();
                             break;
                         }
@@ -339,6 +376,7 @@ public class Client {
         String address = args[1];
 
         Client client = new Client(port, address);
+        
         client.start();
         client.run();
     }
