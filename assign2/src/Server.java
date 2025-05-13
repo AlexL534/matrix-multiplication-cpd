@@ -205,7 +205,7 @@ public class Server {
         connection.sendMessage("Welcome to the CPD Chat server", out);
 
         String token = null;
-        boolean isReconnected = false;
+        boolean isInRoom = false;
         try {
             //start the authentication process
             connection.sendMessage("Options: ", out);
@@ -222,40 +222,64 @@ public class Server {
                 out.close();
                 return;
             }
-            else if(option.equals("2")){
-
+            else if (option.equals("2")) {
                 connection.sendMessage("Token: ", out);
                 token = connection.readResponse(in);
 
                 boolean isValid = false;
 
-                for (String userToken : authUsers.keySet()){
-                    if(userToken.equals(token)){
+                // Check if the token is valid
+                authUserslock.lock();
+                try {
+                    if (authUsers.containsKey(token)) {
                         isValid = true;
-                        break;
                     }
+                } finally {
+                    authUserslock.unlock();
                 }
-                if (!isValid){
+
+                if (!isValid) {
                     connection.sendMessage("Token not found", out);
                     clientSocket.close();
+                    in.close();
+                    out.close();
                     return;
                 }
-                
+
                 connection.sendMessage("Reconnected: " + authUsers.get(token), out);
-                isReconnected = true;
 
-                boolean isInRoom = false;
-
-                for (String userToken : userRoom.keySet()){
-                    if (userToken.equals(token)){
+                // Check if the user is in a room
+                userRoomLock.lock();
+                try {
+                    if (userRoom.containsKey(token)) {
                         isInRoom = true;
-                        connection.sendMessage("true", out);
-                        connection.sendMessage(chatRooms.get(userRoom.get(userToken)), out);
-                        break;
-                    }
-                }
-                if (!isInRoom) connection.sendMessage("false", out);
+                        Integer roomId = userRoom.get(token);
 
+                        // Notify the client of the room they are rejoining
+                        connection.sendMessage("true", out);
+                        connection.sendMessage(chatRooms.get(roomId), out);
+
+                        // Add the user back to the room's user list
+                        roomsUsersLock.lock();
+                        try {
+                            List<String> users = roomsUsers.get(roomId);
+                            users.remove(token); // Remove the user if they are already in the list
+                            users.add(token); // Add the user back to the list
+                            roomsUsers.replace(roomId, users);
+                            userRoom.replace(token, roomId);
+                        } finally {
+                            roomsUsersLock.unlock();
+                        }
+
+                        // Notify other users in the room
+                        sendMessageToChat(" reconnected to the room", roomId, token, true);
+
+                    } else {
+                        connection.sendMessage("false", out);
+                    }
+                } finally {
+                    userRoomLock.unlock();
+                }
             }
             else if(option.equals("1")){
                 token = this.authentication(in, out);
@@ -279,7 +303,7 @@ public class Server {
         //TODO: Connection to chat room AI
 
         String inputLine;
-        Boolean isSendRooms = isReconnected ? false : true;
+        Boolean isSendRooms = isInRoom ? false : true;
         
         while ((inputLine = connection.readResponse(in)) != null) {
             String[] parts = inputLine.split(":");
@@ -367,10 +391,9 @@ public class Server {
             } finally{
                 authLock.unlock();
             }
-            
-            
+
         }
-        
+
         //remove user from server before closing connection
         if(token != null){
 
