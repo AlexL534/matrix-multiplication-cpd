@@ -5,6 +5,7 @@ import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,13 +14,16 @@ import java.util.concurrent.locks.ReentrantLock;
 public class Server {
 
     private int port;
-    private Map<Integer, String> chatRooms; //key = chat ID, value = chat name
+    private Map<Integer, ChatService.ChatRoomInfo> chatRooms; //key = chat ID, value = chat name
     private Map<String, String> authUsers; //key = user token, value = username
     private Map<String, PrintWriter> authSocket; //key = user token, value =  socket to connect with the authenticated user
     private Map<Integer, List<String>> roomsUsers;  //key= room id, value = list of user(token) in the room
     private Map<String, Integer> userRoom; //key = user token, value = room id. Indicates the room where the user is now
     private ServerSocket serverSocket;
     private final String FLAG = "::";
+    private final LLMService llmService = new LLMService();
+    private final Map<Integer, List<String>> roomConversations = new HashMap<>();
+    private final ReentrantLock conversationLock = new ReentrantLock();
 
     //Locks
     ReentrantLock authLock;         //Used when accessing the authentication service
@@ -208,7 +212,7 @@ public class Server {
             //insert the new room into the chat rooms list
             chatRoomsLock.lock();
             try{
-                chatRooms.put(id, responseInfo[1]);
+                chatRooms.put(id, new ChatService.ChatRoomInfo(responseInfo[1], false));
             } catch(Exception e){
                 throw new Exception(e);
             }finally{
@@ -362,7 +366,7 @@ public class Server {
 
                         // Notify the client of the room they are rejoining
                         connection.sendMessage("true", out);
-                        connection.sendMessage(chatRooms.get(roomId), out);
+                        connection.sendMessage(chatRooms.get(roomId).toString(), out);
 
                         // Add the user back to the room's user list
                         roomsUsersLock.lock();
@@ -445,7 +449,7 @@ public class Server {
                 //send the message to the other
                 Integer roomID = -1;
                 userRoomLock.lock();
-                try{
+                try {
                     roomID = userRoom.get(token);
                 }
                 catch(Exception e){
@@ -454,7 +458,13 @@ public class Server {
                 } finally{
                     userRoomLock.unlock();
                 }
-                sendMessageToChat(message, roomID, token, false);
+
+                ChatService.ChatRoomInfo roomInfo = ChatService.getAvailableChats().get(roomID);
+                if (roomInfo.isAIRoom) {
+                    handleAIRoomMessage(message, roomID, token);
+                } else {
+                    sendMessageToChat(message, roomID, token, false);
+                }
             }
             else if(state == ClientState.CHATS_MENU){
                 //show the available rooms
@@ -610,5 +620,29 @@ public class Server {
         }
 
     }
-    
+
+    private void handleAIRoomMessage(String message, Integer roomId, String token) {
+        conversationLock.lock();
+        try {
+            String username = authUsers.get(token);
+            String formattedMessage = username + ": " + message;
+            List<String> conversation = roomConversations.computeIfAbsent(roomId, k -> new ArrayList<>());
+            conversation.add(formattedMessage);
+
+            ChatService.ChatRoomInfo roomInfo = ChatService.getAvailableChats().get(roomId);
+            
+            String aiResponse = llmService.getAIResponse(message, conversation);
+            
+            String botMessage = "Bot: " + aiResponse;
+            conversation.add(botMessage);
+            
+            sendMessageToChat(formattedMessage, roomId, token, false);
+            sendMessageToChat(botMessage, roomId, "BOT_TOKEN", false);
+        } catch (Exception e) {
+            System.err.println("LLM Error: " + e.getMessage());
+            sendMessageToChat("Bot is currently unavailable. Error: " + e.getMessage(), roomId, "SYSTEM", false);
+        } finally {
+            conversationLock.unlock();
+        }
+    }
 }
