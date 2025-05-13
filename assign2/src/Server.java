@@ -208,11 +208,13 @@ public class Server {
         boolean isReconnected = false;
         try {
             //start the authentication process
+            connection.sendMessage(FLAG, out);
             connection.sendMessage("Options: ", out);
             connection.sendMessage("1. Authenticate", out);
             connection.sendMessage("2. Reconnect", out);
             connection.sendMessage("3. Exit", out);
-            connection.sendMessage("Select an option: ", out); 
+            connection.sendMessage("Select an option: ", out);
+            connection.sendMessage(FLAG, out); 
 
             String option = connection.readResponse(in);
             if (option.equals("3")) {

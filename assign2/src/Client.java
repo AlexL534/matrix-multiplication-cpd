@@ -168,11 +168,7 @@ public class Client {
             System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
 
             //Choices message
-            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
-            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
-            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
-            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
-            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+            System.out.println(connection.readMultilineMessage(in));
 
             StringBuilder choice = new StringBuilder();
             if (!waitForUserInput(userInput, choice, timeoutAfk)) {
