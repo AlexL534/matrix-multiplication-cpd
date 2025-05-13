@@ -26,6 +26,31 @@ public class ChatService {
         return idToName;
     }
 
+    public static int getRoomIdByName(String name) throws Exception{
+        int id = 0;
+        try (BufferedReader reader = new BufferedReader(new FileReader("chats.txt"))) {
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                String[] chatInfo = line.split(":");
+                if(chatInfo.length != 2){
+                    throw new Error("Something wrong happened when parsing the Chat file!");
+                }
+                int idFile = Integer.parseInt(chatInfo[0]);
+                String nameFile = chatInfo[1];
+                if(nameFile.equals(name)){
+                    id = idFile;
+                }
+            }
+        }
+
+        if( id == 0){
+            throw new Exception("Chat name not found!");
+        }
+        
+        return id;
+    }
+
     public static Boolean createChat(String name) throws Exception{
 
         //verify if the chat exists
