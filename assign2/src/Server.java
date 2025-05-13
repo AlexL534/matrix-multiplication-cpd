@@ -327,17 +327,65 @@ public class Server {
                 out.close();
                 return;
             }
-            else if(option.equals("2")){
+           else if (option.equals("2")) {
                 connection.sendMessage("Token: ", out);
                 token = connection.readResponse(in);
-                for (String userToken : authUsers.keySet()){
-                    if(userToken.equals(token)){
-                        break;
+
+                boolean isValid = false;
+                boolean isInRoom = false;
+
+                // Check if the token is valid
+                authUserslock.lock();
+                try {
+                    if (authUsers.containsKey(token)) {
+                        isValid = true;
                     }
+                } finally {
+                    authUserslock.unlock();
                 }
+
+                if (!isValid) {
+                    connection.sendMessage("Token not found", out);
+                    clientSocket.close();
+                    in.close();
+                    out.close();
+                    return;
+                }
+
                 connection.sendMessage("Reconnected: " + authUsers.get(token), out);
-                isReconnected = true;
-                state = ClientState.CHATS_MENU;
+
+                // Check if the user is in a room
+                userRoomLock.lock();
+                try {
+                    if (userRoom.containsKey(token)) {
+                        isInRoom = true;
+                        Integer roomId = userRoom.get(token);
+
+                        // Notify the client of the room they are rejoining
+                        connection.sendMessage("true", out);
+                        connection.sendMessage(chatRooms.get(roomId), out);
+
+                        // Add the user back to the room's user list
+                        roomsUsersLock.lock();
+                        try {
+                            List<String> users = roomsUsers.get(roomId);
+                            users.remove(token); // Remove the user if they are already in the list
+                            users.add(token); // Add the user back to the list
+                            roomsUsers.replace(roomId, users);
+                            userRoom.replace(token, roomId);
+                        } finally {
+                            roomsUsersLock.unlock();
+                        }
+
+                        // Notify other users in the room
+                        sendMessageToChat(" reconnected to the room", roomId, token, true);
+
+                    } else {
+                        connection.sendMessage("false", out);
+                    }
+                } finally {
+                    userRoomLock.unlock();
+                }
             }
             else if(option.equals("1")){
                 state = ClientState.AUTHENTICATE;

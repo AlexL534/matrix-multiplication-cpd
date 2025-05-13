@@ -193,7 +193,14 @@ public class Client {
                 }
                 connection.sendMessage(token.toString(), out);
                 this.authToken = token.toString();
-                //still need the reconnect of the room
+
+                System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+                
+                String isInRoom = connection.readResponseWithTimeout(in, timeoutServer);
+
+                if (isInRoom.equals("true")){
+                    System.out.println("\nReconnected to room: " + connection.readResponseWithTimeout(in, timeoutServer));
+                }
                 
             } else {
                 clientSocket.close();
@@ -201,12 +208,13 @@ public class Client {
                 return;
             }
 
-            //usage instructions that appear before the room options
-            System.out.println("\nUsage instructions:");
-            System.out.println("    - Enter a message to interact with the server;");
-            System.out.println("    - Enter 'exit' at any time to quit the server;");
-            System.out.println("    - When some special input is asked, please use the provided instructions.");
-            System.out.println("Press Enter to continue (if needed).\n");
+            if (!choice.toString().equals("2")) {
+                System.out.println("\nUsage instructions:");
+                System.out.println("    - Enter a message to interact with the server;");
+                System.out.println("    - Enter 'exit' at any time to quit the server;");
+                System.out.println("    - When some special input is asked, please use the provided instructions.");
+                System.out.println("Press Enter to continue (if needed).\n");
+            }
 
             //thread that handles message reception
             Thread.ofVirtual().start(() -> {
