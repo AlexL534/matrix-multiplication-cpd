@@ -395,6 +395,7 @@ public class Server {
 
             //If the user is in a room, send the message to the other users. Else, send the rooms available to connect
             if(state == ClientState.CHAT){
+
                 //send the message to the other
                 Integer roomID = -1;
                 userRoomLock.lock();
@@ -407,7 +408,19 @@ public class Server {
                 } finally{
                     userRoomLock.unlock();
                 }
-                sendMessageToChat(message, roomID, token, false);
+
+                if(message.equals("exitRoom")){
+                    //the user wants to exit the room. Send disconnect message
+                    sendDisconnectMessage(token);
+                    disconnectUserFromRoom(token);
+                    state = ClientState.CHATS_MENU;
+                    isSendRooms = true;
+                    connection.sendMessage("You exited the room successfully. Press enter to continue", out);
+                    continue;
+                }else{
+                    //normal message
+                    sendMessageToChat(message, roomID, token, false);
+                }
             }
             else if(state == ClientState.CHATS_MENU){
                 //show the available rooms
@@ -454,24 +467,7 @@ public class Server {
         if(token != null){
 
             //first send the message to all the room users warn about the disconnection
-            Integer roomID = -1;
-            userRoomLock.lock();
-            try{
-                if(userRoom.containsKey(token)){
-                    roomID = userRoom.get(token);
-                }
-                    
-            }
-            catch(Exception e){
-                throw e;
-            } finally{
-                userRoomLock.unlock();
-            }
-
-            if(!roomID.equals(-1)){
-                sendMessageToChat(" left the room", roomID, token, true);
-            }
-
+            sendDisconnectMessage(token);
 
             disconnectUser(token); //disconnects the user from all the server's datastructures
         }
@@ -484,10 +480,30 @@ public class Server {
 
     }
 
-    private void disconnectUser(String token) throws Exception{
+    private void sendDisconnectMessage(String token){
+        Integer roomID = -1;
+        userRoomLock.lock();
+        try{
+            if(userRoom.containsKey(token)){
+                roomID = userRoom.get(token);
+            }
+                
+        }
+        catch(Exception e){
+            throw e;
+        } finally{
+            userRoomLock.unlock();
+        }
+
+        if(!roomID.equals(-1)){
+            sendMessageToChat(" left the room", roomID, token, true);
+        }
+    }
+
+    private void disconnectUserFromRoom(String token) throws Exception{
         Integer roomId = null;
 
-            //remove the user from the user rooms map
+        //remove the user from the user rooms map
             userRoomLock.lock();
             try{
                 if(userRoom.containsKey(token)){
@@ -515,6 +531,11 @@ public class Server {
                     roomsUsersLock.unlock();
                 }
             }
+    }
+
+    private void disconnectUser(String token) throws Exception{
+        
+            disconnectUserFromRoom(token);
 
             //remove the user from the socket mapping
             authSocketLock.lock();

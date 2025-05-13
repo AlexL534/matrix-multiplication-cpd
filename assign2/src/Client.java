@@ -205,7 +205,8 @@ public class Client {
             System.out.println("\nUsage instructions:");
             System.out.println("    - Enter a message to interact with the server;");
             System.out.println("    - Enter 'exit' at any time to quit the server;");
-            System.out.println("    - When some special input is asked, please use the provided instructions.");
+            System.out.println("    - Enter 'exitRoom' to exit a room (when you are connected to a chat room);");
+            System.out.println("    - When some special input is asked, please follow the provided instructions.");
             System.out.println("Press Enter to continue (if needed).\n");
 
             //thread that handles message reception
@@ -240,7 +241,7 @@ public class Client {
                         }
                         lockReauth.unlock();
 
-                        System.out.println("\nServer: " + response);
+                        System.out.println("\n" + response);
 
                     } catch (Exception e) {
                         lockRunnig.lock();
