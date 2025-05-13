@@ -208,13 +208,11 @@ public class Server {
         boolean isReconnected = false;
         try {
             //start the authentication process
-            connection.sendMessage(FLAG, out);
             connection.sendMessage("Options: ", out);
             connection.sendMessage("1. Authenticate", out);
             connection.sendMessage("2. Reconnect", out);
             connection.sendMessage("3. Exit", out);
-            connection.sendMessage("Select an option: ", out);
-            connection.sendMessage(FLAG, out); 
+            connection.sendMessage("Select an option: ", out); 
 
             String option = connection.readResponse(in);
             if (option.equals("3")) {
@@ -225,15 +223,39 @@ public class Server {
                 return;
             }
             else if(option.equals("2")){
+
                 connection.sendMessage("Token: ", out);
                 token = connection.readResponse(in);
+
+                boolean isValid = false;
+
                 for (String userToken : authUsers.keySet()){
                     if(userToken.equals(token)){
+                        isValid = true;
                         break;
                     }
                 }
+                if (!isValid){
+                    connection.sendMessage("Token not found", out);
+                    clientSocket.close();
+                    return;
+                }
+                
                 connection.sendMessage("Reconnected: " + authUsers.get(token), out);
                 isReconnected = true;
+
+                boolean isInRoom = false;
+
+                for (String userToken : userRoom.keySet()){
+                    if (userToken.equals(token)){
+                        isInRoom = true;
+                        connection.sendMessage("true", out);
+                        connection.sendMessage(chatRooms.get(userRoom.get(userToken)), out);
+                        break;
+                    }
+                }
+                if (!isInRoom) connection.sendMessage("false", out);
+
             }
             else if(option.equals("1")){
                 token = this.authentication(in, out);
