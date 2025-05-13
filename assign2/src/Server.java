@@ -123,7 +123,10 @@ public class Server {
         for(Integer id : chatRooms.keySet()){
             connection.sendMessage(id.toString() +  ". " + chatRooms.get(id), out);
         }
-        connection.sendMessage("Enter room id to enter", out);
+        //special selections
+        connection.sendMessage("a. Create a new room", out);
+
+        connection.sendMessage("Enter room id to enter or letter to select a special option", out);
         connection.sendMessage(FLAG, out);
     }
 
@@ -174,6 +177,24 @@ public class Server {
         sendMessageToChat(" joined the Room", selectedInteger, token, true);
     }
 
+    private void handleRoomCreation(BufferedReader in, PrintWriter out, String token) throws Exception{
+        while(true){
+            //TODO: token verification
+            connection.sendMessage("Please enter the chat name:", out);
+            String response = connection.readResponse(in);
+            String[] responseInfo = response.split(":");
+            boolean isCreated = ChatService.createChat(responseInfo[1]);
+
+            if(isCreated){
+                connection.sendMessage("New Chat room created successfully. Press Enter to continue", out);
+                break;
+            }
+
+            connection.sendMessage("Name is already used. Press Enter to continue", out);
+            response = connection.readResponse(in);
+        }
+    }
+
     private void sendMessageToChat(String message, Integer roomId, String token, boolean isInfoMessage){
 
         //username of the user that is sending the message
@@ -197,6 +218,9 @@ public class Server {
     }
 
     private void handleClients(Socket clientSocket) throws Exception{
+        ClientState state = ClientState.RECONECT_MENU;//state of the client. Starts with the reconect menu
+
+
         System.out.println("Connected Client");
 
         BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
@@ -207,6 +231,7 @@ public class Server {
         String token = null;
         boolean isReconnected = false;
         try {
+            //TODO: Reconect logic should be in another function. It should verify if the current state is reconect_menu
             //start the authentication process
             connection.sendMessage(FLAG, out);
             connection.sendMessage("Options: ", out);
@@ -234,9 +259,12 @@ public class Server {
                 }
                 connection.sendMessage("Reconnected: " + authUsers.get(token), out);
                 isReconnected = true;
+                state = ClientState.CHATS_MENU;
             }
             else if(option.equals("1")){
+                state = ClientState.AUTHENTICATE;
                 token = this.authentication(in, out);
+                state = ClientState.CHATS_MENU;
                 System.out.println("Token auth: " + token);
             }
             else{
@@ -259,15 +287,18 @@ public class Server {
         String inputLine;
         Boolean isSendRooms = isReconnected ? false : true;
         
-        while ((inputLine = connection.readResponse(in)) != null) {
+        while ((inputLine = connection.readResponse(in)) != null && state != ClientState.EXIT) {
             String[] parts = inputLine.split(":");
             if (parts.length < 2) {
                 if (inputLine.equals("REAUTH")) {
                     try { // restart auth flow
-                      this.authentication(in, out);
+                        state = ClientState.AUTHENTICATE;
+                        this.authentication(in, out);
+                        state = ClientState.CHATS_MENU;
                     }
                     catch (Exception e){
                       System.out.println(e.getMessage());
+                      state = ClientState.EXIT;
                       break;
                     } 
                     continue;
@@ -296,6 +327,7 @@ public class Server {
             catch(Exception e){
                 System.err.println(e.getMessage());
                 connection.sendMessage("Internal Server Error!", out);
+                state = ClientState.EXIT;
                 break;
             }
             finally {
@@ -303,7 +335,7 @@ public class Server {
             }
 
             //If the user is in a room, send the message to the other users. Else, send the rooms available to connect
-            if(userRoom.containsKey(token)){
+            if(state == ClientState.CHAT){
                 //send the message to the other
                 Integer roomID = -1;
                 userRoomLock.lock();
@@ -311,13 +343,14 @@ public class Server {
                     roomID = userRoom.get(token);
                 }
                 catch(Exception e){
+                    state = ClientState.EXIT;
                     throw e;
                 } finally{
                     userRoomLock.unlock();
                 }
                 sendMessageToChat(message, roomID, token, false);
             }
-            else{
+            else if(state == ClientState.CHATS_MENU){
                 //show the available rooms
                 try{
                     if(isSendRooms){
@@ -325,11 +358,30 @@ public class Server {
                         isSendRooms = false;
                     }
                     else{
-                        handleRoomSelection(out, token, message);
+                        //message could be a special option (are identified by a letter)
+                        if(message.matches("[a-zA-Z]")){
+                            
+                            if(message.equals("a")){
+                                //user selected the create room option
+                                state = ClientState.CREATE_CHAT;
+                                handleRoomCreation(in, out, token);
+                                state = ClientState.CHATS_MENU;
+                                isSendRooms = true; //need to send the rooms again
+                            }
+
+                        }
+                        else{
+                            //no special option is possible. Handle normal room selection
+                            handleRoomSelection(out, token, message);
+                            state = ClientState.CHAT;
+                        }
+                        
+                        
                     }
                 } catch(Exception e){
                     System.err.println(e.getMessage());
                     connection.sendMessage("Internal Server Error!", out);
+                    state = ClientState.EXIT;
                     break;
                 }
             }
@@ -341,6 +393,7 @@ public class Server {
             } catch(Exception e){
                 System.err.println(e.getMessage());
                 connection.sendMessage("Internal Server Error!", out);
+                state = ClientState.EXIT;
                 break;
             } finally{
                 authLock.unlock();
