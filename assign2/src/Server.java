@@ -307,17 +307,15 @@ public class Server {
         connection.sendMessage("Welcome to the CPD Chat server", out);
 
         String token = null;
-        boolean isReconnected = false;
+        boolean isInRoom = false;
         try {
             //TODO: Reconect logic should be in another function. It should verify if the current state is reconect_menu
             //start the authentication process
-            connection.sendMessage(FLAG, out);
             connection.sendMessage("Options: ", out);
             connection.sendMessage("1. Authenticate", out);
             connection.sendMessage("2. Reconnect", out);
             connection.sendMessage("3. Exit", out);
-            connection.sendMessage("Select an option: ", out);
-            connection.sendMessage(FLAG, out); 
+            connection.sendMessage("Select an option: ", out); 
 
             String option = connection.readResponse(in);
             if (option.equals("3")) {
@@ -411,7 +409,7 @@ public class Server {
         //TODO: Connection to chat room AI
 
         String inputLine;
-        Boolean isSendRooms = isReconnected ? false : true;
+        Boolean isSendRooms = isInRoom ? false : true;
         
         while ((inputLine = connection.readResponse(in)) != null && state != ClientState.EXIT) {
             String[] parts = inputLine.split(":");
@@ -497,7 +495,7 @@ public class Server {
             refreshToken(out, token);
             
         }
-        
+
         //remove user from server before closing connection
         if(token != null){
 
