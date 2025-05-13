@@ -167,9 +167,41 @@ public class Client {
             //Welcome message
             System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
 
-            //authentication
-            if (!handleAuthentication(in, userInput, out)) {
+            //Choices message
+            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+
+            StringBuilder choice = new StringBuilder();
+            if (!waitForUserInput(userInput, choice, timeoutAfk)) {
+                System.out.println("Disconnected: Timed out waiting for username.");
+                return;
+            }
+
+            connection.sendMessage(choice.toString(), out);
+
+            if (choice.toString().equals("1")) {
+                //authentication
+                if (!handleAuthentication(in, userInput, out)) {
+                    clientSocket.close();
+                    return;
+                }
+            } else if (choice.toString().equals("2")) {
+                System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+                StringBuilder token = new StringBuilder();
+                if (!waitForUserInput(userInput, token, timeoutAfk)) {
+                    System.out.println("Disconnected: Timed out waiting for token.");
+                    return;
+                }
+                connection.sendMessage(token.toString(), out);
+                this.authToken = token.toString();
+                //still need the reconnect of the room
+                
+            } else {
                 clientSocket.close();
+                System.out.println("Disconnecting...");
                 return;
             }
 
