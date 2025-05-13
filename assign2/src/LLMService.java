@@ -29,9 +29,7 @@ public class LLMService {
                 model,
                 escapeJson(buildFullPrompt(prompt, conversationHistory))
             );
-
-            System.out.println("Sending to Ollama: " + jsonInput);
-
+            
             HttpURLConnection connection = (HttpURLConnection) new URL(OLLAMA_URL).openConnection();
             connection.setRequestMethod("POST");
             connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
@@ -109,11 +107,38 @@ public class LLMService {
     private String parseAIResponse(String jsonResponse) {
         try {
             int startIdx = jsonResponse.indexOf("\"response\":\"") + 12;
-            int endIdx = jsonResponse.indexOf("\"", startIdx);
-            return jsonResponse.substring(startIdx, endIdx);
+            if (startIdx < 12) {
+                throw new IllegalArgumentException("Invalid JSON response - missing 'response' field");
+            }
+            
+            StringBuilder response = new StringBuilder();
+            boolean escape = false;
+            
+            for (int i = startIdx; i < jsonResponse.length(); i++) {
+                char c = jsonResponse.charAt(i);
+                
+                if (escape) {
+                    response.append(c);
+                    escape = false;
+                } else if (c == '\\') {
+                    escape = true;
+                } else if (c == '"') {
+                    if (i + 1 < jsonResponse.length()) {
+                        char nextChar = jsonResponse.charAt(i + 1);
+                        if (nextChar == ',' || nextChar == '}') {
+                            break;
+                        }
+                    }
+                    response.append(c);
+                } else {
+                    response.append(c);
+                }
+            }
+            return response.toString();
         } catch (Exception e) {
-            System.err.println("Failed to parse response: " + jsonResponse);
-            return "Error parsing AI response";
+            System.err.println("Failed to parse response: " + e.getMessage());
+            System.err.println("Response content: " + jsonResponse);
+            return "Error parsing AI response: " + e.getMessage();
         }
     }
 
