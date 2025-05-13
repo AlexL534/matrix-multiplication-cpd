@@ -440,7 +440,7 @@ public class Server {
 
             ChatService.ChatRoomInfo roomInfo = ChatService.getAvailableChats().get(roomId);
             
-            String aiResponse = llmService.getAIResponse(roomInfo.prompt, conversation);
+            String aiResponse = llmService.getAIResponse(message, conversation);
             
             String botMessage = "Bot: " + aiResponse;
             conversation.add(botMessage);

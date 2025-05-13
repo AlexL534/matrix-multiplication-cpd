@@ -16,37 +16,43 @@ public class ChatService {
     public static class ChatRoomInfo {
         public final String name;
         public final boolean isAIRoom;
-        public final String prompt;
 
-        public ChatRoomInfo(String name, boolean isAIRoom, String prompt) {
+        public ChatRoomInfo(String name, boolean isAIRoom) {
             this.name = name;
             this.isAIRoom = isAIRoom;
-            this.prompt = prompt;
+        }
+
+        @Override
+        public String toString() {
+            return name + (isAIRoom ? " [AI]" : "");
         }
     }
     
-    public static Map<Integer, ChatRoomInfo> getAvailableChats() throws Exception{
+    public static Map<Integer, ChatRoomInfo> getAvailableChats() throws Exception {
         lock.lock();
         try {
             if (chatRooms.isEmpty()) {
                 loadRoomsFromFile();
-                //if file is empty, add some default rooms
-                if (chatRooms.isEmpty()) {
-                    chatRooms.put(1, new ChatRoomInfo("General", false, null));
-                    chatRooms.put(2, new ChatRoomInfo("AI Help", true, "You are a helpful assistant. Answer questions concisely."));
-                }
             }
-            return new HashMap<>(chatRooms);
+
+            Map<Integer, ChatRoomInfo> idToRoomInfo = new HashMap<>();
+            for (Map.Entry<Integer, ChatRoomInfo> entry : chatRooms.entrySet()) {
+                idToRoomInfo.put(entry.getKey(), entry.getValue());
+            }
+
+            return idToRoomInfo;
+
         } finally {
             lock.unlock();
         }
     }
 
-    public static int createRoom(String name, boolean isAIRoom, String prompt) {
+
+    public static int createRoom(String name, boolean isAIRoom) {
         lock.lock();
         try {
             int newId = chatRooms.isEmpty() ? 1 : Collections.max(chatRooms.keySet()) + 1;
-            chatRooms.put(newId, new ChatRoomInfo(name, isAIRoom, prompt));
+            chatRooms.put(newId, new ChatRoomInfo(name, isAIRoom));
             saveRoomsToFile();
             return newId;
         } finally {
@@ -58,14 +64,14 @@ public class ChatService {
         try (BufferedReader reader = new BufferedReader(new FileReader("chats.txt"))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                String[] parts = line.split("::");
-                if (parts.length >= 3) {
-                    int id = Integer.parseInt(parts[0]);
-                    String name = parts[1];
-                    boolean isAI = Boolean.parseBoolean(parts[2]);
-                    String prompt = parts.length > 3 ? parts[3] : null;
-                    chatRooms.put(id, new ChatRoomInfo(name, isAI, prompt));
+                String[] parts = line.split(":");
+                if (parts.length != 3) {
+                    throw new IllegalArgumentException("Invalid room format: " + line);
                 }
+                int id = Integer.parseInt(parts[0]);
+                String name = parts[1];
+                boolean isAI = Boolean.parseBoolean(parts[2]);
+                chatRooms.put(id, new ChatRoomInfo(name, isAI));
             }
         }
     }
@@ -73,8 +79,11 @@ public class ChatService {
     private static void saveRoomsToFile() {
         try (PrintWriter writer = new PrintWriter(new FileWriter("chats.txt"))) {
             for (Map.Entry<Integer, ChatRoomInfo> entry : chatRooms.entrySet()) {
-                writer.println(entry.getKey() + "::" + entry.getValue().name + "::" + 
-                             entry.getValue().isAIRoom + "::" + entry.getValue().prompt);
+                String roomName = entry.getValue().name;
+                if (entry.getValue().isAIRoom) {
+                    roomName = "[AI] " + roomName;
+                }
+                writer.println(entry.getKey() + ":" + roomName + ":" + entry.getValue().isAIRoom);
             }
         } catch (IOException e) {
             System.err.println("Failed to save chat rooms: " + e.getMessage());
