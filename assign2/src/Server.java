@@ -255,7 +255,7 @@ public class Server {
                 //user is conneted/disconnected message
                 out.println(username + message);
             }else{
-                out.println("[" + username +"]: " + message);
+                out.println("[" + username + "]: " + message);
             }
            
         }
