@@ -355,8 +355,11 @@ public class Server {
                     return;
                 }
 
+
                 connection.sendMessage("Reconnected: " + authUsers.get(token), out);
 
+                authSocket.remove(token);
+                authSocket.put(token, out);
                 // Check if the user is in a room
                 userRoomLock.lock();
                 try {
@@ -382,6 +385,7 @@ public class Server {
 
                         // Notify other users in the room
                         sendMessageToChat(" reconnected to the room", roomId, token, true);
+                        state = ClientState.CHAT;
 
                     } else {
                         connection.sendMessage("false", out);
