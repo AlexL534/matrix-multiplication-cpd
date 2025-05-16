@@ -239,6 +239,105 @@ public class Server {
         }
     }
 
+    private ClientState handleClientChoice(BufferedReader in, PrintWriter out, String token, Socket clientSocket, ClientState state) throws Exception{
+
+            //start the authentication process
+            connection.sendMessage(FLAG, out);
+            connection.sendMessage("Options: ", out);
+            connection.sendMessage("1. Authenticate", out);
+            connection.sendMessage("2. Reconnect", out);
+            connection.sendMessage("3. Exit", out);
+            connection.sendMessage("Select an option: ", out); 
+            connection.sendMessage(FLAG, out);
+
+            String option = connection.readResponse(in);
+            if (option.equals("3")) {
+                connection.sendMessage("Bye!", out);
+                clientSocket.close();
+                in.close();
+                out.close();
+                return ClientState.EXIT;
+            }
+            else if (option.equals("2")) {
+                connection.sendMessage("Token: ", out);
+                token = connection.readResponse(in);
+
+                boolean isValid = false;
+                boolean isInRoom = false;
+
+                // Check if the token is valid
+                authUserslock.lock();
+                try {
+                    if (authUsers.containsKey(token)) {
+                        isValid = true;
+                    }
+                } finally {
+                    authUserslock.unlock();
+                }
+
+                if (!isValid) {
+                    connection.sendMessage("Token not found", out);
+                    clientSocket.close();
+                    in.close();
+                    out.close();
+                    return ClientState.EXIT;
+                }
+
+
+                connection.sendMessage("Reconnected: " + authUsers.get(token), out);
+
+                authSocket.remove(token);
+                authSocket.put(token, out);
+                // Check if the user is in a room
+                userRoomLock.lock();
+                try {
+                    if (userRoom.containsKey(token)) {
+                        isInRoom = true;
+                        Integer roomId = userRoom.get(token);
+
+                        // Notify the client of the room they are rejoining
+                        connection.sendMessage("true", out);
+                        connection.sendMessage(chatRooms.get(roomId).toString(), out);
+
+                        // Add the user back to the room's user list
+                        roomsUsersLock.lock();
+                        try {
+                            List<String> users = roomsUsers.get(roomId);
+                            users.remove(token); // Remove the user if they are already in the list
+                            users.add(token); // Add the user back to the list
+                            roomsUsers.replace(roomId, users);
+                            userRoom.replace(token, roomId);
+                        } finally {
+                            roomsUsersLock.unlock();
+                        }
+
+                        // Notify other users in the room
+                        sendMessageToChat(" reconnected to the room", roomId, token, true);
+                        return ClientState.CHAT;
+
+                    } else {
+                        connection.sendMessage("false", out);
+                        return ClientState.CHATS_MENU;
+                    }
+                } finally {
+                    userRoomLock.unlock();
+                }
+            }
+            else if(option.equals("1")){
+                state = ClientState.AUTHENTICATE;
+                token = this.authentication(in, out);
+                System.out.println("Token auth: " + token);
+                return ClientState.CHATS_MENU;
+            }
+            else{
+                connection.sendMessage("Invalid option", out);
+                clientSocket.close();
+                in.close();
+                out.close();
+                return ClientState.EXIT;
+            }
+    }
+
     private void sendMessageToChat(String message, Integer roomId, String token, boolean isInfoMessage){
 
         //username of the user that is sending the message
@@ -312,100 +411,8 @@ public class Server {
 
         String token = null;
         try {
-            //TODO: Reconect logic should be in another function. It should verify if the current state is reconect_menu
-            //start the authentication process
-            connection.sendMessage(FLAG, out);
-            connection.sendMessage("Options: ", out);
-            connection.sendMessage("1. Authenticate", out);
-            connection.sendMessage("2. Reconnect", out);
-            connection.sendMessage("3. Exit", out);
-            connection.sendMessage("Select an option: ", out); 
-            connection.sendMessage(FLAG, out);
-
-            String option = connection.readResponse(in);
-            if (option.equals("3")) {
-                connection.sendMessage("Bye!", out);
-                clientSocket.close();
-                in.close();
-                out.close();
-                return;
-            }
-           else if (option.equals("2")) {
-                connection.sendMessage("Token: ", out);
-                token = connection.readResponse(in);
-
-                boolean isValid = false;
-                boolean isInRoom = false;
-
-                // Check if the token is valid
-                authUserslock.lock();
-                try {
-                    if (authUsers.containsKey(token)) {
-                        isValid = true;
-                    }
-                } finally {
-                    authUserslock.unlock();
-                }
-
-                if (!isValid) {
-                    connection.sendMessage("Token not found", out);
-                    clientSocket.close();
-                    in.close();
-                    out.close();
-                    return;
-                }
-
-
-                connection.sendMessage("Reconnected: " + authUsers.get(token), out);
-
-                authSocket.remove(token);
-                authSocket.put(token, out);
-                // Check if the user is in a room
-                userRoomLock.lock();
-                try {
-                    if (userRoom.containsKey(token)) {
-                        isInRoom = true;
-                        Integer roomId = userRoom.get(token);
-
-                        // Notify the client of the room they are rejoining
-                        connection.sendMessage("true", out);
-                        connection.sendMessage(chatRooms.get(roomId).toString(), out);
-
-                        // Add the user back to the room's user list
-                        roomsUsersLock.lock();
-                        try {
-                            List<String> users = roomsUsers.get(roomId);
-                            users.remove(token); // Remove the user if they are already in the list
-                            users.add(token); // Add the user back to the list
-                            roomsUsers.replace(roomId, users);
-                            userRoom.replace(token, roomId);
-                        } finally {
-                            roomsUsersLock.unlock();
-                        }
-
-                        // Notify other users in the room
-                        sendMessageToChat(" reconnected to the room", roomId, token, true);
-                        state = ClientState.CHAT;
-
-                    } else {
-                        connection.sendMessage("false", out);
-                    }
-                } finally {
-                    userRoomLock.unlock();
-                }
-            }
-            else if(option.equals("1")){
-                state = ClientState.AUTHENTICATE;
-                token = this.authentication(in, out);
-                state = ClientState.CHATS_MENU;
-                System.out.println("Token auth: " + token);
-            }
-            else{
-                connection.sendMessage("Invalid option", out);
-                clientSocket.close();
-                in.close();
-                out.close();
-                return;
+            if (state == ClientState.RECONECT_MENU) {
+                state = handleClientChoice(in, out, token,clientSocket, state);
             }
         }
         catch (Exception e){
