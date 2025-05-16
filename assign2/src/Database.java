@@ -27,7 +27,7 @@ public class Database {
             chatRoomsLock.lock();
             try {
                 for (Map.Entry<Integer, ChatService.ChatRoomInfo> entry : chatRooms.entrySet()) {
-                    writer.println(entry.getKey() + ":" + entry.getValue().roomName + ":" + entry.getValue().isAIRoom);
+                    writer.println(entry.getKey() + ":" + entry.getValue().name + ":" + entry.getValue().isAIRoom);
                 }
             } finally { chatRoomsLock.unlock(); }
 

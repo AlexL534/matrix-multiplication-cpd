@@ -36,6 +36,9 @@ public class Server {
 
     private Connection connection;
 
+    // Database file name
+    private static final String DB_FILE = "database.txt";
+
     //constructor
     public Server(int port) throws Exception{
         this.port = port;
@@ -60,6 +63,9 @@ public class Server {
         chatServiceLock = new ReentrantLock();
 
         connection = new Connection();
+
+        // Load database state
+        Database.load(authUsers, chatRooms, userRoom, roomsUsers, roomConversations, DB_FILE);
     }
 
     public void start() throws IOException{
@@ -110,6 +116,10 @@ public class Server {
                     authSocketLock.lock();
                     authSocket.put(token, out);
                     authSocketLock.unlock();
+
+                    // Save DB after authentication
+                    saveDatabase();
+
                     break;
                 }
                 
@@ -180,6 +190,12 @@ public class Server {
             roomsUsersLock.unlock();
         }
 
+        // Save DB after user joins room
+        saveDatabase();
+
+        // Send all previous messages of the room to the user
+        sendRoomHistory(out, selectedInteger);
+
         sendMessageToChat(" joined the Room", selectedInteger, token, true);
     }
 
@@ -228,6 +244,9 @@ public class Server {
             }finally{
                 roomsUsersLock.unlock();
             }
+
+            // Save DB after room creation
+            saveDatabase();
 
             if(isCreated){
                 connection.sendMessage("New Chat room created successfully. Press Enter to continue", out);
@@ -288,6 +307,10 @@ public class Server {
 
                 authSocket.remove(token);
                 authSocket.put(token, out);
+
+                // Save DB after reconnect
+                saveDatabase();
+
                 // Check if the user is in a room
                 userRoomLock.lock();
                 try {
@@ -310,6 +333,12 @@ public class Server {
                         } finally {
                             roomsUsersLock.unlock();
                         }
+
+                        // Save DB after user is added back to room
+                        saveDatabase();
+
+                        // Send all previous messages of the room to the user
+                        sendRoomHistory(out, roomId);
 
                         // Notify other users in the room
                         sendMessageToChat(" reconnected to the room", roomId, token, true);
@@ -358,6 +387,23 @@ public class Server {
             }
            
         }
+
+        // Save message to room history if not info message or if info message is join/leave/reconnect
+        if (!isInfoMessage || (message.contains("joined the Room") || message.contains("left the room") || message.contains("reconnected to the room"))) {
+            conversationLock.lock();
+            try {
+                List<String> conversation = roomConversations.computeIfAbsent(roomId, k -> new ArrayList<>());
+                if(isInfoMessage){
+                    conversation.add(username + message);
+                }else{
+                    conversation.add("[" + username + "]: " + message);
+                }
+            } finally {
+                conversationLock.unlock();
+            }
+            // Save DB after message
+            saveDatabase();
+        }
     }
 
     private boolean verifyToken(PrintWriter out, String token) throws Exception{
@@ -369,6 +415,8 @@ public class Server {
                     authUserslock.lock();
                     try {
                         authUsers.remove(token);
+                        // Save DB after removing invalid token
+                        saveDatabase();
                         return false;
                     } finally {
                         authUserslock.unlock();
@@ -607,6 +655,9 @@ public class Server {
             finally{
                 authUserslock.unlock();
             }
+
+            // Save DB after disconnect
+            saveDatabase();
     }
 
     public static void main(String args[]){
@@ -649,9 +700,42 @@ public class Server {
             
             sendMessageToChat(formattedMessage, roomId, token, false);
             sendMessageToChat(botMessage, roomId, "BOT_TOKEN", false);
+
+            // Save DB after AI message
+            saveDatabase();
         } catch (Exception e) {
             System.err.println("LLM Error: " + e.getMessage());
             sendMessageToChat("Bot is currently unavailable. Error: " + e.getMessage(), roomId, "SYSTEM", false);
+        } finally {
+            conversationLock.unlock();
+        }
+    }
+
+    // Save the database state
+    private void saveDatabase() {
+        Database.save(
+            authUsers, authUserslock,
+            chatRooms, chatRoomsLock,
+            userRoom, userRoomLock,
+            roomsUsers, roomsUsersLock,
+            roomConversations, conversationLock,
+            DB_FILE
+        );
+    }
+
+    // Send all previous messages of the room to the user
+    private void sendRoomHistory(PrintWriter out, int roomId) {
+        conversationLock.lock();
+        try {
+            List<String> conversation = roomConversations.get(roomId);
+            if (conversation != null && !conversation.isEmpty()) {
+                out.println(FLAG);
+                out.println("Previous messages in this room:");
+                for (String msg : conversation) {
+                    out.println(msg);
+                }
+                out.println(FLAG);
+            }
         } finally {
             conversationLock.unlock();
         }
