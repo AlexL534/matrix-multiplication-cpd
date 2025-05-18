@@ -350,7 +350,6 @@ public class Server {
                 }
 
                 connection.sendMessage("Reconnected: " + authUsers.get(token), out);
-                isReconnected = true;
                 state = ClientState.CHATS_MENU;
             }
             else if(option.equals("1")){

@@ -205,6 +205,7 @@ public class Client {
                 if (isInRoom.equals("true")){
                     System.out.println("\nReconnected to room: " + connection.readResponseWithTimeout(in, timeoutServer));
                 }
+                System.out.println("teste");
                 
             } else {
                 clientSocket.close();
