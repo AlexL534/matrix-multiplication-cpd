@@ -136,7 +136,7 @@ public class Client {
             if (tokenInfo.length == 2) {
                 this.authToken = tokenInfo[1];
                 System.out.println("Authentication successful!");
-                this.addTokenFile(this.authToken, username.toString());
+                Client.addTokenFile(this.authToken, username.toString());
                 return true;
             }
 
@@ -393,7 +393,7 @@ public class Client {
                         lockRunnig.lock();
                         running[0] = false;            
                         lockRunnig.unlock();
-                        this.removeTokenFromFile(this.authToken);    
+                        Client.removeTokenFromFile(this.authToken);    
                         break;
                     }
 

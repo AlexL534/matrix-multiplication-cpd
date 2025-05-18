@@ -119,7 +119,7 @@ public class AuthService {
     public static void refreshToken(String token) {
         tokensLock.lock();
         try {
-            Long expirationTime = activeTokens.get(token);
+            activeTokens.get(token);
             activeTokens.remove(token);
             activeTokens.put(token, System.currentTimeMillis() + TOKEN_TIMEOUT);
         }

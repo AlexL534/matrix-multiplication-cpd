@@ -5,7 +5,6 @@ import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -282,8 +281,6 @@ public class Server {
                 token = connection.readResponse(in);
 
                 boolean isValid = false;
-                boolean isInRoom = false;
-
                 // Check if the token is valid
                 authUserslock.lock();
                 try {
@@ -315,7 +312,6 @@ public class Server {
                 userRoomLock.lock();
                 try {
                     if (userRoom.containsKey(token)) {
-                        isInRoom = true;
                         Integer roomId = userRoom.get(token);
 
                         // Notify the client of the room they are rejoining
@@ -375,8 +371,6 @@ public class Server {
         authUserslock.unlock();
 
         //send message to all the users in the chat
-        System.out.println(roomsUsers.get(roomId));
-        System.out.println(authSocket);
         for(String userToken : roomsUsers.get(roomId)){
             authSocketLock.lock();
             
@@ -398,7 +392,7 @@ public class Server {
         if (!isInfoMessage || (message.contains("joined the Room") || message.contains("left the room") || message.contains("reconnected to the room"))) {
             conversationLock.lock();
             try {
-                List<String> conversation = roomConversations.computeIfAbsent(roomId, k -> new ArrayList<>());
+                List<String> conversation = roomConversations.computeIfAbsent(roomId, _ -> new ArrayList<>());
                 if(isInfoMessage){
                     conversation.add(username + message);
                 }else{
@@ -476,7 +470,6 @@ public class Server {
             out.close();
             return;
         } 
-        //TODO: Connection to chat room AI
 
         String inputLine;
         Boolean isSendRooms = true;
@@ -715,10 +708,10 @@ public class Server {
         try {
             String username = authUsers.get(token);
             String formattedMessage = username + ": " + message;
-            List<String> conversation = roomConversations.computeIfAbsent(roomId, k -> new ArrayList<>());
+            List<String> conversation = roomConversations.computeIfAbsent(roomId, _ -> new ArrayList<>());
             conversation.add(formattedMessage);
 
-            ChatService.ChatRoomInfo roomInfo = ChatService.getAvailableChats().get(roomId);
+            ChatService.getAvailableChats().get(roomId);
             
             String aiResponse = llmService.getAIResponse(message, conversation);
             

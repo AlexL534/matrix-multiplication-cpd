@@ -107,7 +107,7 @@ public class Database {
                         if (idx > 0) {
                             int roomId = Integer.parseInt(line.substring(0, idx));
                             String msg = line.substring(idx + 1);
-                            roomConversations.computeIfAbsent(roomId, k -> new ArrayList<>()).add(msg);
+                            roomConversations.computeIfAbsent(roomId, _ -> new ArrayList<>()).add(msg);
                         }
                         break;
                 }

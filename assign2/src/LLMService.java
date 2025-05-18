@@ -2,7 +2,6 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 import java.util.concurrent.locks.*;
-import java.util.stream.Collectors;
 
 public class LLMService {
     private static final String OLLAMA_URL = "http://localhost:11434/api/generate";
