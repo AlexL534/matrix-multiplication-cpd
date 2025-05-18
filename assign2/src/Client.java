@@ -1,3 +1,5 @@
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -134,6 +136,7 @@ public class Client {
             if (tokenInfo.length == 2) {
                 this.authToken = tokenInfo[1];
                 System.out.println("Authentication successful!");
+                this.addTokenFile(this.authToken, username.toString());
                 return true;
             }
 
@@ -150,6 +153,116 @@ public class Client {
         }
     }
 
+    public static Boolean addTokenFile(String token, String name) throws Exception {
+        StringBuilder fileContent = new StringBuilder();
+        boolean replaced = false;
+
+        try (BufferedReader reader = new BufferedReader(new FileReader("tokens.txt"))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.equals(token + ":" + name)) {
+                    // Token already exists for this user
+                    return true;
+                } else if (line.endsWith(":" + name)) {
+                    // Replace old token for this user
+                    fileContent.append(token).append(":").append(name).append(System.lineSeparator());
+                    replaced = true;
+                } else {
+                    fileContent.append(line).append(System.lineSeparator());
+                }
+            }
+        } catch (IOException e) {
+            // If file doesn't exist, that's fine, we'll create it below
+        }
+
+        if (replaced) {
+            // Write the updated content back to the file
+            try (PrintWriter writer = new PrintWriter(new FileWriter("tokens.txt"))) {
+                writer.print(fileContent.toString());
+            } catch (IOException e) {
+                throw new Exception(e.getMessage());
+            }
+            return false; // Token was replaced
+        } else {
+            // Append new token
+            try (PrintWriter writer = new PrintWriter(new FileWriter("tokens.txt", true), true)) {
+                writer.println(token + ":" + name);
+            } catch (IOException e) {
+                throw new Exception(e.getMessage());
+            }
+            return true; // New token added
+        }
+    }
+
+    public static Boolean removeTokenFromFile(String token) throws Exception{
+        try (BufferedReader reader = new BufferedReader(new FileReader("tokens.txt"))) {
+            String line;
+            StringBuilder fileContent = new StringBuilder();
+            boolean found = false;
+
+            while ((line = reader.readLine()) != null) {
+                if (!line.startsWith(token + ":")) {
+                    fileContent.append(line).append(System.lineSeparator());
+                } else {
+                    found = true; // Token found and removed
+                }
+            }
+
+            if (found) {
+                try (PrintWriter writer = new PrintWriter(new FileWriter("tokens.txt"))) {
+                    writer.print(fileContent.toString());
+                }
+            }
+            return found;
+        } catch(Exception e){
+            throw new Exception(e.getMessage());
+        }
+    }
+
+    public void handleUserChoice(String choice, BufferedReader in, BufferedReader userInput, PrintWriter out) throws Exception {
+
+            if (choice.toString().equals("1")) {
+                    //authentication
+                    if (!handleAuthentication(in, userInput, out)) {
+                        clientSocket.close();
+                        return;
+                    }
+
+            } else if (choice.toString().equals("2")) {
+                    //reconnect
+                    System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+                    StringBuilder token = new StringBuilder();
+                    if (!waitForUserInput(userInput, token, timeoutAfk)) {
+                        System.out.println("Disconnected: Timed out waiting for token.");
+                        return;
+                    }
+                    connection.sendMessage(token.toString(), out);
+                    this.authToken = token.toString();
+
+                    System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+                    
+                    String isInRoom = connection.readResponseWithTimeout(in, timeoutServer);
+
+                    if (isInRoom.equals("true")){
+                        System.out.println("\nReconnected to room: " + connection.readResponseWithTimeout(in, timeoutServer));
+                    }
+                    
+            } else {
+                    //exit
+                    clientSocket.close();
+                    System.out.println("Disconnecting...");
+                    return;
+            }
+
+            if (!choice.toString().equals("2")) {
+                System.out.println("\nUsage instructions:");
+                System.out.println("    - Enter a message to interact with the server;");
+                System.out.println("    - Enter 'exit' at any time to quit the server;");
+                System.out.println("    - Enter 'exitRoom' at any time to leave a room;");
+                System.out.println("    - When some special input is asked, please use the provided instructions.");
+                System.out.println("Press Enter to continue (if needed).\n");
+            }
+    }
 
     public void run() throws Exception {
         BufferedReader in = new BufferedReader(new InputStreamReader(this.clientSocket.getInputStream()));
@@ -168,11 +281,7 @@ public class Client {
             System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
 
             //Choices message
-            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
-            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
-            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
-            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
-            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+            System.out.println(connection.readMultilineMessage(in));
 
             StringBuilder choice = new StringBuilder();
             if (!waitForUserInput(userInput, choice, timeoutAfk)) {
@@ -182,6 +291,7 @@ public class Client {
 
             connection.sendMessage(choice.toString(), out);
 
+<<<<<<< HEAD
             if (choice.toString().equals("1")) {
                 //authentication
                 if (!handleAuthentication(in, userInput, out)) {
@@ -223,6 +333,9 @@ public class Client {
                 System.out.println("Press Enter to continue (if needed).\n");
             }  
 
+=======
+            this.handleUserChoice(choice.toString(), in, userInput, out);
+>>>>>>> c54defe1d0093cfca6aca4344613b0f3c21fabaa
 
             //thread that handles message reception
             Thread.ofVirtual().start(() -> {
@@ -323,7 +436,8 @@ public class Client {
                     if (message.toString().equalsIgnoreCase("exit")) {
                         lockRunnig.lock();
                         running[0] = false;            
-                        lockRunnig.unlock();       
+                        lockRunnig.unlock();
+                        this.removeTokenFromFile(this.authToken);    
                         break;
                     }
 
@@ -367,7 +481,6 @@ public class Client {
             System.out.println("Disconnected from server.");
         }
 
-        
     }
 
     public static void main(String[] args) throws Exception {

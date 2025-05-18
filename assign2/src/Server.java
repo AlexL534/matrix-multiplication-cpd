@@ -5,6 +5,7 @@ import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,13 +14,16 @@ import java.util.concurrent.locks.ReentrantLock;
 public class Server {
 
     private int port;
-    private Map<Integer, String> chatRooms; //key = chat ID, value = chat name
+    private Map<Integer, ChatService.ChatRoomInfo> chatRooms; //key = chat ID, value = chat name
     private Map<String, String> authUsers; //key = user token, value = username
     private Map<String, PrintWriter> authSocket; //key = user token, value =  socket to connect with the authenticated user
     private Map<Integer, List<String>> roomsUsers;  //key= room id, value = list of user(token) in the room
     private Map<String, Integer> userRoom; //key = user token, value = room id. Indicates the room where the user is now
     private ServerSocket serverSocket;
     private final String FLAG = "::";
+    private final LLMService llmService = new LLMService();
+    private final Map<Integer, List<String>> roomConversations = new HashMap<>();
+    private final ReentrantLock conversationLock = new ReentrantLock();
 
     //Locks
     ReentrantLock authLock;         //Used when accessing the authentication service
@@ -31,6 +35,9 @@ public class Server {
     ReentrantLock chatServiceLock; //Used when accessing the chat service to create and fetch chats rooms
 
     private Connection connection;
+
+    // Database file name
+    private static final String DB_FILE = "database.txt";
 
     //constructor
     public Server(int port) throws Exception{
@@ -56,6 +63,9 @@ public class Server {
         chatServiceLock = new ReentrantLock();
 
         connection = new Connection();
+
+        // Load database state
+        Database.load(authUsers, chatRooms, userRoom, roomsUsers, roomConversations, DB_FILE);
     }
 
     public void start() throws IOException{
@@ -106,6 +116,10 @@ public class Server {
                     authSocketLock.lock();
                     authSocket.put(token, out);
                     authSocketLock.unlock();
+
+                    // Save DB after authentication
+                    saveDatabase();
+
                     break;
                 }
                 
@@ -176,6 +190,12 @@ public class Server {
             roomsUsersLock.unlock();
         }
 
+        // Save DB after user joins room
+        saveDatabase();
+
+        // Send all previous messages of the room to the user
+        sendRoomHistory(out, selectedInteger);
+
         sendMessageToChat(" joined the Room", selectedInteger, token, true);
     }
 
@@ -208,7 +228,7 @@ public class Server {
             //insert the new room into the chat rooms list
             chatRoomsLock.lock();
             try{
-                chatRooms.put(id, responseInfo[1]);
+                chatRooms.put(id, new ChatService.ChatRoomInfo(responseInfo[1], false));
             } catch(Exception e){
                 throw new Exception(e);
             }finally{
@@ -225,6 +245,9 @@ public class Server {
                 roomsUsersLock.unlock();
             }
 
+            // Save DB after room creation
+            saveDatabase();
+
             if(isCreated){
                 connection.sendMessage("New Chat room created successfully. Press Enter to continue", out);
                 break;
@@ -233,6 +256,115 @@ public class Server {
             connection.sendMessage("Name is already used. Press Enter to continue", out);
             response = connection.readResponse(in);
         }
+    }
+
+    private ClientState handleClientChoice(BufferedReader in, PrintWriter out, String token, Socket clientSocket, ClientState state) throws Exception{
+
+            //start the authentication process
+            connection.sendMessage(FLAG, out);
+            connection.sendMessage("Options: ", out);
+            connection.sendMessage("1. Authenticate", out);
+            connection.sendMessage("2. Reconnect", out);
+            connection.sendMessage("3. Exit", out);
+            connection.sendMessage("Select an option: ", out); 
+            connection.sendMessage(FLAG, out);
+
+            String option = connection.readResponse(in);
+            if (option.equals("3")) {
+                connection.sendMessage("Bye!", out);
+                clientSocket.close();
+                in.close();
+                out.close();
+                return ClientState.EXIT;
+            }
+            else if (option.equals("2")) {
+                connection.sendMessage("Token: ", out);
+                token = connection.readResponse(in);
+
+                boolean isValid = false;
+                boolean isInRoom = false;
+
+                // Check if the token is valid
+                authUserslock.lock();
+                try {
+                    if (authUsers.containsKey(token)) {
+                        isValid = true;
+                    }
+                } finally {
+                    authUserslock.unlock();
+                }
+
+                if (!isValid) {
+                    connection.sendMessage("Token not found", out);
+                    clientSocket.close();
+                    in.close();
+                    out.close();
+                    return ClientState.EXIT;
+                }
+
+
+                connection.sendMessage("Reconnected: " + authUsers.get(token), out);
+
+                authSocket.remove(token);
+                authSocket.put(token, out);
+
+                // Save DB after reconnect
+                saveDatabase();
+
+                // Check if the user is in a room
+                userRoomLock.lock();
+                try {
+                    if (userRoom.containsKey(token)) {
+                        isInRoom = true;
+                        Integer roomId = userRoom.get(token);
+
+                        // Notify the client of the room they are rejoining
+                        connection.sendMessage("true", out);
+                        connection.sendMessage(chatRooms.get(roomId).toString(), out);
+
+                        // Add the user back to the room's user list
+                        roomsUsersLock.lock();
+                        try {
+                            List<String> users = roomsUsers.get(roomId);
+                            users.remove(token); // Remove the user if they are already in the list
+                            users.add(token); // Add the user back to the list
+                            roomsUsers.replace(roomId, users);
+                            userRoom.replace(token, roomId);
+                        } finally {
+                            roomsUsersLock.unlock();
+                        }
+
+                        // Save DB after user is added back to room
+                        saveDatabase();
+
+                        // Send all previous messages of the room to the user
+                        sendRoomHistory(out, roomId);
+
+                        // Notify other users in the room
+                        sendMessageToChat(" reconnected to the room", roomId, token, true);
+                        return ClientState.CHAT;
+
+                    } else {
+                        connection.sendMessage("false", out);
+                        return ClientState.CHATS_MENU;
+                    }
+                } finally {
+                    userRoomLock.unlock();
+                }
+            }
+            else if(option.equals("1")){
+                state = ClientState.AUTHENTICATE;
+                token = this.authentication(in, out);
+                System.out.println("Token auth: " + token);
+                return ClientState.CHATS_MENU;
+            }
+            else{
+                connection.sendMessage("Invalid option", out);
+                clientSocket.close();
+                in.close();
+                out.close();
+                return ClientState.EXIT;
+            }
     }
 
     private void sendMessageToChat(String message, Integer roomId, String token, boolean isInfoMessage){
@@ -251,9 +383,26 @@ public class Server {
                 //user is conneted/disconnected message
                 out.println(username + message);
             }else{
-                out.println("[" + username +"]: " + message);
+                out.println("[" + username + "]: " + message);
             }
            
+        }
+
+        // Save message to room history if not info message or if info message is join/leave/reconnect
+        if (!isInfoMessage || (message.contains("joined the Room") || message.contains("left the room") || message.contains("reconnected to the room"))) {
+            conversationLock.lock();
+            try {
+                List<String> conversation = roomConversations.computeIfAbsent(roomId, k -> new ArrayList<>());
+                if(isInfoMessage){
+                    conversation.add(username + message);
+                }else{
+                    conversation.add("[" + username + "]: " + message);
+                }
+            } finally {
+                conversationLock.unlock();
+            }
+            // Save DB after message
+            saveDatabase();
         }
     }
 
@@ -266,6 +415,8 @@ public class Server {
                     authUserslock.lock();
                     try {
                         authUsers.remove(token);
+                        // Save DB after removing invalid token
+                        saveDatabase();
                         return false;
                     } finally {
                         authUserslock.unlock();
@@ -307,63 +458,9 @@ public class Server {
         connection.sendMessage("Welcome to the CPD Chat server", out);
 
         String token = null;
-        boolean isInRoom = false;
         try {
-            //TODO: Reconect logic should be in another function. It should verify if the current state is reconect_menu
-            //start the authentication process
-            connection.sendMessage("Options: ", out);
-            connection.sendMessage("1. Authenticate", out);
-            connection.sendMessage("2. Reconnect", out);
-            connection.sendMessage("3. Exit", out);
-            connection.sendMessage("Select an option: ", out); 
-
-            String option = connection.readResponse(in);
-            if (option.equals("3")) {
-                connection.sendMessage("Bye!", out);
-                clientSocket.close();
-                in.close();
-                out.close();
-                return;
-            }
-            else if (option.equals("2")) {
-                connection.sendMessage("Token: ", out);
-                token = connection.readResponse(in);
-
-                boolean isValid = false;
-
-                // Check if the token is valid
-                authUserslock.lock();
-                try {
-                    if (authUsers.containsKey(token)) {
-                        isValid = true;
-                    }
-                } finally {
-                    authUserslock.unlock();
-                }
-
-                if (!isValid) {
-                    connection.sendMessage("Token not found", out);
-                    clientSocket.close();
-                    in.close();
-                    out.close();
-                    return;
-                }
-
-                connection.sendMessage("Reconnected: " + authUsers.get(token), out);
-                state = ClientState.CHATS_MENU;
-            }
-            else if(option.equals("1")){
-                state = ClientState.AUTHENTICATE;
-                token = this.authentication(in, out);
-                state = ClientState.CHATS_MENU;
-                System.out.println("Token auth: " + token);
-            }
-            else{
-                connection.sendMessage("Invalid option", out);
-                clientSocket.close();
-                in.close();
-                out.close();
-                return;
+            if (state == ClientState.RECONECT_MENU) {
+                state = handleClientChoice(in, out, token,clientSocket, state);
             }
         }
         catch (Exception e){
@@ -376,7 +473,7 @@ public class Server {
         //TODO: Connection to chat room AI
 
         String inputLine;
-        Boolean isSendRooms = isInRoom ? false : true;
+        Boolean isSendRooms = true;
         
         while ((inputLine = connection.readResponse(in)) != null && state != ClientState.EXIT) {
             String[] parts = inputLine.split(":");
@@ -412,7 +509,7 @@ public class Server {
                 //send the message to the other
                 Integer roomID = -1;
                 userRoomLock.lock();
-                try{
+                try {
                     roomID = userRoom.get(token);
                 }
                 catch(Exception e){
@@ -422,6 +519,11 @@ public class Server {
                     userRoomLock.unlock();
                 }
 
+                ChatService.ChatRoomInfo roomInfo = ChatService.getAvailableChats().get(roomID);
+                if (roomInfo.isAIRoom) {
+                    handleAIRoomMessage(message, roomID, token);
+                } else {
+    
                 if(message.equals("exitRoom")){
                     //the user wants to exit the room. Send disconnect message
                     sendDisconnectMessage(token);
@@ -433,6 +535,7 @@ public class Server {
                 }else{
                     //normal message
                     sendMessageToChat(message, roomID, token, false);
+                }
                 }
             }
             else if(state == ClientState.CHATS_MENU){
@@ -573,6 +676,9 @@ public class Server {
             finally{
                 authUserslock.unlock();
             }
+
+            // Save DB after disconnect
+            saveDatabase();
     }
 
     public static void main(String args[]){
@@ -597,5 +703,62 @@ public class Server {
         }
 
     }
-    
+
+    private void handleAIRoomMessage(String message, Integer roomId, String token) {
+        conversationLock.lock();
+        try {
+            String username = authUsers.get(token);
+            String formattedMessage = username + ": " + message;
+            List<String> conversation = roomConversations.computeIfAbsent(roomId, k -> new ArrayList<>());
+            conversation.add(formattedMessage);
+
+            ChatService.ChatRoomInfo roomInfo = ChatService.getAvailableChats().get(roomId);
+            
+            String aiResponse = llmService.getAIResponse(message, conversation);
+            
+            String botMessage = "Bot: " + aiResponse;
+            conversation.add(botMessage);
+            
+            sendMessageToChat(formattedMessage, roomId, token, false);
+            sendMessageToChat(botMessage, roomId, "BOT_TOKEN", false);
+
+            // Save DB after AI message
+            saveDatabase();
+        } catch (Exception e) {
+            System.err.println("LLM Error: " + e.getMessage());
+            sendMessageToChat("Bot is currently unavailable. Error: " + e.getMessage(), roomId, "SYSTEM", false);
+        } finally {
+            conversationLock.unlock();
+        }
+    }
+
+    // Save the database state
+    private void saveDatabase() {
+        Database.save(
+            authUsers, authUserslock,
+            chatRooms, chatRoomsLock,
+            userRoom, userRoomLock,
+            roomsUsers, roomsUsersLock,
+            roomConversations, conversationLock,
+            DB_FILE
+        );
+    }
+
+    // Send all previous messages of the room to the user
+    private void sendRoomHistory(PrintWriter out, int roomId) {
+        conversationLock.lock();
+        try {
+            List<String> conversation = roomConversations.get(roomId);
+            if (conversation != null && !conversation.isEmpty()) {
+                out.println(FLAG);
+                out.println("Previous messages in this room:");
+                for (String msg : conversation) {
+                    out.println(msg);
+                }
+                out.println(FLAG);
+            }
+        } finally {
+            conversationLock.unlock();
+        }
+    }
 }
