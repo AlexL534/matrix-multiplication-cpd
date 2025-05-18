@@ -291,51 +291,7 @@ public class Client {
 
             connection.sendMessage(choice.toString(), out);
 
-<<<<<<< HEAD
-            if (choice.toString().equals("1")) {
-                //authentication
-                if (!handleAuthentication(in, userInput, out)) {
-                    clientSocket.close();
-                    return;
-                }
-            } else if (choice.toString().equals("2")) {
-                System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
-                StringBuilder token = new StringBuilder();
-                if (!waitForUserInput(userInput, token, timeoutAfk)) {
-                    System.out.println("Disconnected: Timed out waiting for token.");
-                    return;
-                }
-                connection.sendMessage(token.toString(), out);
-                this.authToken = token.toString();
-
-                System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
-                
-                String isInRoom = connection.readResponseWithTimeout(in, timeoutServer);
-
-                if (isInRoom.equals("true")){
-                    System.out.println("\nReconnected to room: " + connection.readResponseWithTimeout(in, timeoutServer));
-                }
-                System.out.println("teste");
-                
-            } else {
-                clientSocket.close();
-                System.out.println("Disconnecting...");
-                return;
-            }
-            
-            if (!choice.toString().equals("2")) {
-                //usage instructions that appear before the room options
-                System.out.println("\nUsage instructions:");
-                System.out.println("    - Enter a message to interact with the server;");
-                System.out.println("    - Enter 'exit' at any time to quit the server;");
-                System.out.println("    - Enter 'exitRoom' to exit a room (when you are connected to a chat room);");
-            System.out.println("    - When some special input is asked, please follow the provided instructions.");
-                System.out.println("Press Enter to continue (if needed).\n");
-            }  
-
-=======
             this.handleUserChoice(choice.toString(), in, userInput, out);
->>>>>>> c54defe1d0093cfca6aca4344613b0f3c21fabaa
 
             //thread that handles message reception
             Thread.ofVirtual().start(() -> {

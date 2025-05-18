@@ -367,7 +367,7 @@ public class Server {
             }
     }
 
-    private void sendMessageToChat(String message, Integer roomId, String token, boolean isInfoMessage){
+    private void sendMessageToChat(String message, Integer roomId, String token, boolean isInfoMessage) throws Exception{
 
         //username of the user that is sending the message
         authUserslock.lock();
@@ -375,15 +375,21 @@ public class Server {
         authUserslock.unlock();
 
         //send message to all the users in the chat
+        System.out.println(roomsUsers.get(roomId));
+        System.out.println(authSocket);
         for(String userToken : roomsUsers.get(roomId)){
             authSocketLock.lock();
+            
             PrintWriter out = authSocket.get(userToken);
+            if(out == null){
+                continue; 
+            }
             authSocketLock.unlock();
             if(isInfoMessage){
                 //user is conneted/disconnected message
-                out.println(username + message);
+                connection.sendMessage(username + message, out);
             }else{
-                out.println("[" + username + "]: " + message);
+                connection.sendMessage("[" + username + "]: " + message, out);
             }
            
         }
@@ -596,7 +602,7 @@ public class Server {
 
     }
 
-    private void sendDisconnectMessage(String token){
+    private void sendDisconnectMessage(String token) throws Exception{
         Integer roomID = -1;
         userRoomLock.lock();
         try{
@@ -704,7 +710,7 @@ public class Server {
 
     }
 
-    private void handleAIRoomMessage(String message, Integer roomId, String token) {
+    private void handleAIRoomMessage(String message, Integer roomId, String token) throws Exception {
         conversationLock.lock();
         try {
             String username = authUsers.get(token);
