@@ -224,8 +224,8 @@ public class Client {
             if (choice.toString().equals("1")) {
                     //authentication
                     if (!handleAuthentication(in, userInput, out)) {
-                        clientSocket.close();
-                        return;
+                        
+                        throw new Exception("Failed Authentication!");
                     }
 
             } else if (choice.toString().equals("2")) {
@@ -291,7 +291,7 @@ public class Client {
 
             connection.sendMessage(choice.toString(), out);
 
-            this.handleUserChoice(choice.toString(), in, userInput, out);
+            handleUserChoice(choice.toString(), in, userInput, out);
 
             //thread that handles message reception
             Thread.ofVirtual().start(() -> {
