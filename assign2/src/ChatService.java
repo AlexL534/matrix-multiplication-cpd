@@ -25,6 +25,7 @@ public class ChatService {
         public String toString() {
             return name + (isAIRoom ? " [AI]" : "");
         }
+
     }
     
     public static Map<Integer, ChatRoomInfo> getAvailableChats() throws Exception {
@@ -41,19 +42,6 @@ public class ChatService {
 
             return idToRoomInfo;
 
-        } finally {
-            lock.unlock();
-        }
-    }
-
-
-    public static int createRoom(String name, boolean isAIRoom) {
-        lock.lock();
-        try {
-            int newId = chatRooms.isEmpty() ? 1 : Collections.max(chatRooms.keySet()) + 1;
-            chatRooms.put(newId, new ChatRoomInfo(name, isAIRoom));
-            saveRoomsToFile();
-            return newId;
         } finally {
             lock.unlock();
         }
@@ -78,11 +66,8 @@ public class ChatService {
     private static void saveRoomsToFile() {
         try (PrintWriter writer = new PrintWriter(new FileWriter("chats.txt"))) {
             for (Map.Entry<Integer, ChatRoomInfo> entry : chatRooms.entrySet()) {
-                String roomName = entry.getValue().name;
-                if (entry.getValue().isAIRoom) {
-                    roomName = "[AI] " + roomName;
-                }
-                writer.println(entry.getKey() + ":" + roomName + ":" + entry.getValue().isAIRoom);
+                
+                writer.println(entry.getKey() + ":" + entry.getValue().name + ":" + entry.getValue().isAIRoom);
             }
         } catch (IOException e) {
             System.err.println("Failed to save chat rooms: " + e.getMessage());
@@ -93,10 +78,9 @@ public class ChatService {
         int id = 0;
         try (BufferedReader reader = new BufferedReader(new FileReader("chats.txt"))) {
             String line;
-
             while ((line = reader.readLine()) != null) {
                 String[] chatInfo = line.split(":");
-                if(chatInfo.length != 2){
+                if(chatInfo.length != 3){
                     throw new Error("Something wrong happened when parsing the Chat file!");
                 }
                 int idFile = Integer.parseInt(chatInfo[0]);
@@ -106,44 +90,42 @@ public class ChatService {
                 }
             }
         }
-
         if( id == 0){
             throw new Exception("Chat name not found!");
         }
-        
         return id;
     }
 
-    public static Boolean createChat(String name) throws Exception{
-
-        //verify if the chat exists
+    public static Boolean createChat(String name, boolean isAIRoom) throws Exception{
         int newID = 0;
         try (BufferedReader reader = new BufferedReader(new FileReader("chats.txt"))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 String[] chatInfo = line.split(":");
-                if(chatInfo.length != 2){
+                if(chatInfo.length != 3){
                     throw new Error("Something wrong happened when parsing the chat file!");
-               }
-
-               if(chatInfo[1].equals(name)){
-                //room already exists
-                return false;
-               }
-
-               newID = Integer.parseInt(chatInfo[0]) + 1; //recalculate the new id for the chat room
-
+                }
+                if(chatInfo[1].equals(name)){
+                    //room already exists
+                    return false;
+                }
+                int idFile = Integer.parseInt(chatInfo[0]);
+                if (idFile >= newID) {
+                    newID = idFile + 1;
+                }
             }
         } catch(Exception e){
             throw new Exception(e.getMessage());
         }
 
+        // Always write 3 fields: id:name:isAIRoom
         try(PrintWriter writer = new PrintWriter(new FileWriter("chats.txt", true), true)){
-            writer.println(newID + ":" + name);
+            writer.println(newID + ":" + name + ":" + isAIRoom);
         } catch (IOException e) {
             throw new Exception(e.getMessage()); 
         }
 
+        chatRooms.put(newID, new ChatRoomInfo(name, isAIRoom));
 
         return true;
     }

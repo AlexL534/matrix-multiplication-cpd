@@ -13,41 +13,15 @@ public class Database {
         String filename
     ) {
         try (PrintWriter writer = new PrintWriter(new FileWriter(filename))) {
-            // USERS
-            writer.println("[USERS]");
-            authUsersLock.lock();
-            try {
-                for (Map.Entry<String, String> entry : authUsers.entrySet()) {
-                    writer.println(entry.getKey() + ":" + entry.getValue());
-                }
-            } finally { authUsersLock.unlock(); }
 
             // ROOMS
-            writer.println("\n[ROOMS]");
+            writer.println("[ROOMS]");
             chatRoomsLock.lock();
             try {
                 for (Map.Entry<Integer, ChatService.ChatRoomInfo> entry : chatRooms.entrySet()) {
                     writer.println(entry.getKey() + ":" + entry.getValue().name + ":" + entry.getValue().isAIRoom);
                 }
             } finally { chatRoomsLock.unlock(); }
-
-            // USERROOM
-            writer.println("\n[USERROOM]");
-            userRoomLock.lock();
-            try {
-                for (Map.Entry<String, Integer> entry : userRoom.entrySet()) {
-                    writer.println(entry.getKey() + ":" + entry.getValue());
-                }
-            } finally { userRoomLock.unlock(); }
-
-            // ROOMUSERS
-            writer.println("\n[ROOMUSERS]");
-            roomsUsersLock.lock();
-            try {
-                for (Map.Entry<Integer, List<String>> entry : roomsUsers.entrySet()) {
-                    writer.println(entry.getKey() + ":" + String.join(",", entry.getValue()));
-                }
-            } finally { roomsUsersLock.unlock(); }
 
             // MESSAGES
             writer.println("\n[MESSAGES]");
@@ -84,30 +58,17 @@ public class Database {
                     continue;
                 }
                 switch (section) {
-                    case "[USERS]":
-                        String[] userParts = line.split(":", 2);
-                        if (userParts.length == 2) authUsers.put(userParts[0], userParts[1]);
-                        break;
                     case "[ROOMS]":
                         String[] roomParts = line.split(":", 3);
                         if (roomParts.length == 3)
                             chatRooms.put(Integer.parseInt(roomParts[0]), new ChatService.ChatRoomInfo(roomParts[1], Boolean.parseBoolean(roomParts[2])));
-                        break;
-                    case "[USERROOM]":
-                        String[] urParts = line.split(":", 2);
-                        if (urParts.length == 2) userRoom.put(urParts[0], Integer.parseInt(urParts[1]));
-                        break;
-                    case "[ROOMUSERS]":
-                        String[] ruParts = line.split(":", 2);
-                        if (ruParts.length == 2)
-                            roomsUsers.put(Integer.parseInt(ruParts[0]), new ArrayList<>(Arrays.asList(ruParts[1].split(","))));
                         break;
                     case "[MESSAGES]":
                         int idx = line.indexOf(":");
                         if (idx > 0) {
                             int roomId = Integer.parseInt(line.substring(0, idx));
                             String msg = line.substring(idx + 1);
-                            roomConversations.computeIfAbsent(roomId, _ -> new ArrayList<>()).add(msg);
+                            roomConversations.computeIfAbsent(roomId, k -> new ArrayList<>()).add(msg);
                         }
                         break;
                 }

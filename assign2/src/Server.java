@@ -43,11 +43,11 @@ public class Server {
         this.port = port;
         //parse chat rooms included in a file
         chatRooms = ChatService.getAvailableChats();
+        //initialize empty maps for runtime-only data
         roomsUsers = new HashMap<>();
         for(Integer id : chatRooms.keySet()){
             roomsUsers.put(id, new ArrayList<>());
         }
-        //initialize an empty auth user map. It will be filled when clients start to connect to the server
         authUsers = new HashMap<>();
         userRoom = new HashMap<>();
         authSocket = new HashMap<>();
@@ -63,8 +63,15 @@ public class Server {
 
         connection = new Connection();
 
-        // Load database state
+        // Load database state (only persistent data is loaded)
         Database.load(authUsers, chatRooms, userRoom, roomsUsers, roomConversations, DB_FILE);
+
+
+        authUsers.clear();
+        userRoom.clear();
+        for (List<String> users : roomsUsers.values()) {
+            users.clear();
+        }
     }
 
     public void start() throws IOException{
@@ -201,8 +208,11 @@ public class Server {
     private void handleRoomCreation(BufferedReader in, PrintWriter out, String token) throws Exception{
         while(true){
             connection.sendMessage("Please enter the chat name:", out);
-            String response = connection.readResponse(in);
-            String[] responseInfo = response.split(":");
+            String chatName = connection.readResponse(in).trim().split(":")[1];
+
+            connection.sendMessage("Is this an AI room? (yes/no):", out);
+            String aiResponse = connection.readResponse(in);
+            boolean isAIRoom = aiResponse != null && aiResponse.trim().split(":")[1].equalsIgnoreCase("yes");
 
             if(!verifyToken(out, token)){
                 //invalid token. Needs reauth
@@ -210,13 +220,13 @@ public class Server {
             }
 
             boolean isCreated = false;
-            int  id = 0;
+            int id = 0;
 
-            //create the chat and get it's id
+            //create the chat and get its id
             chatServiceLock.lock();
             try{
-                isCreated =  ChatService.createChat(responseInfo[1]);
-                id = ChatService.getRoomIdByName(responseInfo[1]);
+                isCreated = ChatService.createChat(chatName, isAIRoom);
+                id = ChatService.getRoomIdByName(chatName);
             } catch(Exception e){
                 throw new Exception(e);
             }
@@ -227,7 +237,7 @@ public class Server {
             //insert the new room into the chat rooms list
             chatRoomsLock.lock();
             try{
-                chatRooms.put(id, new ChatService.ChatRoomInfo(responseInfo[1], false));
+                chatRooms.put(id, new ChatService.ChatRoomInfo(chatName, isAIRoom));
             } catch(Exception e){
                 throw new Exception(e);
             }finally{
@@ -253,7 +263,7 @@ public class Server {
             }
 
             connection.sendMessage("Name is already used. Press Enter to continue", out);
-            response = connection.readResponse(in);
+            in.readLine();
         }
     }
 
