@@ -7,6 +7,9 @@ public class LLMService {
     private static final String OLLAMA_URL = "http://localhost:11434/api/generate";
     private final ReentrantLock lock = new ReentrantLock();
     private String model = "llama3";
+        private static final int MAX_HISTORY_LENGTH = 4000;
+        private static final int MAX_READ_TIMEOUT = 120000; // 2 minutes
+
 
     public String getAIResponse(String prompt, List<String> conversationHistory, String initialPrompt) throws IOException {
         lock.lock();
@@ -15,13 +18,7 @@ public class LLMService {
                 throw new IOException("Cannot connect to Ollama server");
             }
 
-            StringBuilder context = new StringBuilder(prompt);
-            if (!conversationHistory.isEmpty()) {
-                context.append("\n\nConversation Context:");
-                for (String msg : conversationHistory) {
-                    context.append("\n").append(msg);
-                }
-            }
+            List<String> limitedHistory = limitHistorySize(conversationHistory);
 
             String jsonInput = String.format(
                 "{\"model\":\"%s\",\"prompt\":\"%s\",\"stream\":false}",
@@ -29,12 +26,12 @@ public class LLMService {
                 escapeJson(buildFullPrompt(prompt, conversationHistory, initialPrompt))
             );
             
-            HttpURLConnection connection = (HttpURLConnection) new URL(OLLAMA_URL).openConnection();
+            HttpURLConnection conne9ction = (HttpURLConnection) new URL(OLLAMA_URL).openConnection();
             connection.setRequestMethod("POST");
             connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
             connection.setRequestProperty("Accept", "application/json");
             connection.setConnectTimeout(10000); // 10 secs
-            connection.setReadTimeout(60000);    // 60 secs
+            connection.setReadTimeout(MAX_READ_TIMEOUT);  
             connection.setDoOutput(true);
 
             try (OutputStream os = connection.getOutputStream();
@@ -71,6 +68,26 @@ public class LLMService {
         } finally {
             lock.unlock();
         }
+    }
+
+        private List<String> limitHistorySize(List<String> conversationHistory) {
+        if (conversationHistory == null || conversationHistory.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        List<String> limitedHistory = new ArrayList<>();
+        int totalLength = 0;
+
+        for (int i = conversationHistory.size() - 1; i >= 0; i--) {
+            String msg = conversationHistory.get(i);
+            if (totalLength + msg.length() > MAX_HISTORY_LENGTH) {
+                break;
+            }
+            limitedHistory.add(0, msg);
+            totalLength += msg.length();
+        }
+
+        return limitedHistory;
     }
 
     private boolean testConnection() {
