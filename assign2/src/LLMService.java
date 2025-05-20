@@ -116,7 +116,15 @@ public class LLMService {
                 char c = jsonResponse.charAt(i);
                 
                 if (escape) {
-                    response.append(c);
+                    if (c == 'n') {
+                        response.append('\n'); 
+                    } else if (c == 'r') {
+                        response.append('\r'); 
+                    } else if (c == 't') {
+                        response.append('\t'); 
+                    } else {
+                        response.append(c);
+                    }
                     escape = false;
                 } else if (c == '\\') {
                     escape = true;

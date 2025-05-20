@@ -417,13 +417,13 @@ public class Server {
         }
 
         // Save message to room history if not info message or if info message is join/leave/reconnect
-        if (!isInfoMessage || (message.contains("joined the Room") || message.contains("left the room") || message.contains("reconnected to the room"))) {
+        if (!isInfoMessage) {
             conversationLock.lock();
             try {
                 List<String> conversation = roomConversations.computeIfAbsent(roomId, _ -> new ArrayList<>());
                 if(isInfoMessage){
                     conversation.add(username + message);
-                }else{
+                } else{
                     conversation.add("[" + username + "]: " + message);
                 }
             } finally {
@@ -748,8 +748,6 @@ public class Server {
                     conversation.add("System: " + roomInfo.initialPrompt);
                 }
             }
-
-            conversation.add(formattedMessage);
 
             ChatService.getAvailableChats().get(roomId);
 

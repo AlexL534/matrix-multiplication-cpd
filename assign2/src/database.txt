@@ -8,12 +8,26 @@
 
 [MESSAGES]
 6:John joined the Room
-6:phone ded noooo
-6:Bot: Sorry to hear that your phone has died! Can you tell me more about what happened? Did it just shut off suddenly, or was there an error message? And have you tried charging it or restarting it to see if that brings it back to life?
-6:[John]: phone ded noooo
-6:[Bot]: Bot: Sorry to hear that your phone has died! Can you tell me more about what happened? Did it just shut off suddenly, or was there an error message? And have you tried charging it or restarting it to see if that brings it back to life?
+6:say hi
+6:Hi John! How can I help you today? You've just joined our Room, so I'm assuming you might have some questions or need assistance with something. Go ahead and ask away - I'm here to help!
+6:[John]: say hi
+6:[Bot]: Hi John! How can I help you today? You've just joined our Room, so I'm assuming you might have some questions or need assistance with something. Go ahead and ask away - I'm here to help!
+6:John left the room
 6:John joined the Room
-6:virou carpete
-6:I apologize for the confusion earlier! It seems like John has re-joined the conversation with some new information. Let's get back on track!nnSo, what did you mean by "virou carpete", John? Was there an error message or any unusual behavior before your phone died? And have you tried charging it or restarting it as I suggested earlier?
-6:[John]: virou carpete
-6:[Bot]: I apologize for the confusion earlier! It seems like John has re-joined the conversation with some new information. Let's get back on track!nnSo, what did you mean by "virou carpete", John? Was there an error message or any unusual behavior before your phone died? And have you tried charging it or restarting it as I suggested earlier?
+6:club penguing ded, nooooo
+6:It looks like John is having a bit of a emotional moment in our Room! Don't worry, we're here to support you, John. What's going on with Club Penguin? Are you experiencing some technical issues or just missing the fun and games? Let me know how I can help you out!
+6:[John]: club penguing ded, nooooo
+6:[Bot]: It looks like John is having a bit of a emotional moment in our Room! Don't worry, we're here to support you, John. What's going on with Club Penguin? Are you experiencing some technical issues or just missing the fun and games? Let me know how I can help you out!
+6:send a multiline mesage
+6:Here is the multiline message:
+
+Hi John! How can I help you today? You've just joined our Room, so I'm assuming you might have some questions or need assistance with something. Go ahead and ask away - I'm here to help!
+
+It looks like John is having a bit of a emotional moment in our Room! Don't worry, we're here to support you, John. What's going on with Club Penguin? Are you experiencing some technical issues or just missing the fun and games? Let me know how I can help you out!
+6:[John]: send a multiline mesage
+6:[Bot]: Here is the multiline message:
+
+Hi John! How can I help you today? You've just joined our Room, so I'm assuming you might have some questions or need assistance with something. Go ahead and ask away - I'm here to help!
+
+It looks like John is having a bit of a emotional moment in our Room! Don't worry, we're here to support you, John. What's going on with Club Penguin? Are you experiencing some technical issues or just missing the fun and games? Let me know how I can help you out!
+6:John left the room
