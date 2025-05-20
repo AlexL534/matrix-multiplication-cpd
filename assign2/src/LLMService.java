@@ -26,7 +26,7 @@ public class LLMService {
                 escapeJson(buildFullPrompt(prompt, conversationHistory, initialPrompt))
             );
             
-            HttpURLConnection conne9ction = (HttpURLConnection) new URL(OLLAMA_URL).openConnection();
+            HttpURLConnection connection = (HttpURLConnection) new URL(OLLAMA_URL).openConnection();
             connection.setRequestMethod("POST");
             connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
             connection.setRequestProperty("Accept", "application/json");
