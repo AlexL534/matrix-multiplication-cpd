@@ -23,6 +23,7 @@
 1:lucas joined the Room
 1:[lucas]: boas
 1:lucas left the room
+1:[lucas]: boas
 2:lucas joined the Room
 2:[lucas]: boas
 2:teste joined the Room
@@ -42,14 +43,6 @@
 6:[Bot]: It looks like John is having a bit of a emotional moment in our Room! Don't worry, we're here to support you, John. What's going on with Club Penguin? Are you experiencing some technical issues or just missing the fun and games? Let me know how I can help you out!
 6:send a multiline mesage
 6:Here is the multiline message:
-
-Hi John! How can I help you today? You've just joined our Room, so I'm assuming you might have some questions or need assistance with something. Go ahead and ask away - I'm here to help!
-
-It looks like John is having a bit of a emotional moment in our Room! Don't worry, we're here to support you, John. What's going on with Club Penguin? Are you experiencing some technical issues or just missing the fun and games? Let me know how I can help you out!
 6:[John]: send a multiline mesage
 6:[Bot]: Here is the multiline message:
-
-Hi John! How can I help you today? You've just joined our Room, so I'm assuming you might have some questions or need assistance with something. Go ahead and ask away - I'm here to help!
-
-It looks like John is having a bit of a emotional moment in our Room! Don't worry, we're here to support you, John. What's going on with Club Penguin? Are you experiencing some technical issues or just missing the fun and games? Let me know how I can help you out!
 6:John left the room
