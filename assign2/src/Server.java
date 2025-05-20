@@ -144,7 +144,13 @@ public class Server {
             while(true){
                 connection.sendMessage("Username: ", out);
                 String username = connection.readResponse(in);
+                System.out.println("Username: " + username.trim());
                 if (username == null) throw new Exception("No Username.");
+                else if (authUsers.containsValue(username.trim())) {
+                    connection.sendMessage("Username already logged in. Try again", out);
+                    continue;
+                }
+                else if (username.trim().isEmpty()) throw new Exception("No Username.");
                 else username = username.trim();
                 connection.sendMessage("Password: ", out);
                 String password = connection.readResponse(in);
