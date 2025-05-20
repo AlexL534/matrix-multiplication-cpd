@@ -277,7 +277,7 @@ public class Client {
         BufferedReader userInput = new BufferedReader(new InputStreamReader(System.in));
 
         //locks to help prevent concurrency when accessing the variables that help the two threads to syncronize
-        final ReentrantLock lockRunnig = new ReentrantLock();
+        final ReentrantLock lockRunning = new ReentrantLock();
         final ReentrantLock lockReauth = new ReentrantLock();
 
         final boolean[] running = new boolean[]{true}; //used to control the execution of the message rection thread
@@ -304,13 +304,13 @@ public class Client {
             Thread.ofVirtual().start(() -> {
                 while (true) {
 
-                    lockRunnig.lock();
+                    lockRunning.lock();
                         if(!running[0]){
                             //thread does not need to run again
-                            lockRunnig.unlock();
+                            lockRunning.unlock();
                             break;
                         }
-                    lockRunnig.unlock();
+                    lockRunning.unlock();
                     
                     try {
                         //Check if is reauth. Wait until the auth is finished
@@ -336,15 +336,15 @@ public class Client {
                         System.out.println("\n" + response);
 
                     } catch (Exception e) {
-                        lockRunnig.lock();
+                        lockRunning.lock();
                         running[0] = false;
-                        lockRunnig.unlock();
+                        lockRunning.unlock();
                         e.printStackTrace();
                         break;
                     }finally{
                         // always release the locks when a loop is completed to avoid blocked threads
-                        if(lockRunnig.isHeldByCurrentThread())
-                            lockRunnig.unlock();
+                        if(lockRunning.isHeldByCurrentThread())
+                            lockRunning.unlock();
                         if(lockReauth.isHeldByCurrentThread())
                             lockReauth.unlock();
                     }
@@ -356,13 +356,13 @@ public class Client {
 
                 try{
 
-                    lockRunnig.lock();
+                    lockRunning.lock();
                         if(!running[0]){
                             //Secondary thread is not running. Can exit the loop in the main thread
-                            lockRunnig.unlock();
+                            lockRunning.unlock();
                             break;
                         }
-                    lockRunnig.unlock();
+                    lockRunning.unlock();
 
                     lockReauth.lock();
                     if(isReauth[0]){
@@ -372,9 +372,9 @@ public class Client {
                             isReauth[0] = false;
                             lockReauth.unlock();
 
-                            lockRunnig.lock();
+                            lockRunning.lock();
                             running[0] = false; 
-                            lockRunnig.unlock();
+                            lockRunning.unlock();
 
                             break;
                         }
@@ -389,17 +389,17 @@ public class Client {
                     if (!waitForUserInput(userInput, message, timeoutAfk)) {
                         System.out.println("Disconnected for being AFK.");
 
-                        lockRunnig.lock();
+                        lockRunning.lock();
                         running[0] = false; 
-                        lockRunnig.unlock();
+                        lockRunning.unlock();
 
                         break;
                     }
                     //check if the message is to exit the server
                     if (message.toString().equalsIgnoreCase("exit")) {
-                        lockRunnig.lock();
+                        lockRunning.lock();
                         running[0] = false;            
-                        lockRunnig.unlock();
+                        lockRunning.unlock();
                         Client.removeTokenFromFile(this.authToken);    
                         break;
                     }
@@ -410,9 +410,9 @@ public class Client {
 
                     connection.sendMessage(authToken + ":" + message.toString(), out);
                 } catch(Exception e){
-                    lockRunnig.lock();
+                    lockRunning.lock();
                     running[0] = false; 
-                    lockRunnig.unlock();
+                    lockRunning.unlock();
 
                     lockReauth.lock();
                     isReauth[0] = false;
@@ -422,8 +422,8 @@ public class Client {
                     throw new Exception(e.getMessage());
                 } finally{
                     // always release the locks when a loop is completed to avoid blocked threads
-                    if(lockRunnig.isHeldByCurrentThread())
-                        lockRunnig.unlock();
+                    if(lockRunning.isHeldByCurrentThread())
+                        lockRunning.unlock();
                     if(lockReauth.isHeldByCurrentThread())
                         lockReauth.unlock();
                 }
@@ -432,9 +432,9 @@ public class Client {
         catch(Exception e){
             throw new Exception(e.getMessage());
         }finally{
-            lockRunnig.lock();
+            lockRunning.lock();
             running[0] = false; 
-            lockRunnig.unlock();
+            lockRunning.unlock();
 
             lockReauth.lock();
             isReauth[0] = false;

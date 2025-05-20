@@ -30,16 +30,26 @@
 2:lucas left the room
 2:teste left the room
 6:John joined the Room
-6:John: what are you?
-6:Bot: I'm happy to help! I'm your friendly Tech Support Assistant, here to provide assistance with any technical questions or issues you might have. I'll do my best to answer your questions clearly and concisely, so feel free to ask me anything!
-6:[John]: John: what are you?
-6:[null]: Bot: I'm happy to help! I'm your friendly Tech Support Assistant, here to provide assistance with any technical questions or issues you might have. I'll do my best to answer your questions clearly and concisely, so feel free to ask me anything!
+6:say hi
+6:Hi John! How can I help you today? You've just joined our Room, so I'm assuming you might have some questions or need assistance with something. Go ahead and ask away - I'm here to help!
+6:[John]: say hi
+6:[Bot]: Hi John! How can I help you today? You've just joined our Room, so I'm assuming you might have some questions or need assistance with something. Go ahead and ask away - I'm here to help!
+6:John left the room
 6:John joined the Room
-6:John: my pc has a blue screen, what do I do?
-6:Bot: Don't worry! A Blue Screen of Death (BSOD) can be frustrating, but it's often a sign that Windows has encountered a critical error. To troubleshoot the issue, let's go through some steps:nn1. **Save any unsaved work**: If you have any open documents or applications, please save them immediately in case your PC restarts.n2. **Identify the error message**: Take note of the error message on the blue screen. It might give us a hint about what's causing the issue.nnNext steps:nn1. **Reboot your PC**: Try restarting your computer to see if it resolves the issue. If the BSOD persists, proceed to step 2.n2. **Check for updates**: Ensure that your Windows and drivers are up-to-date. Outdated software can cause errors like this.n3. **Run a System File Checker (SFC) scan**: This built-in tool scans your system files for corruption or damage.nnTo run an SFC scan:nna. Press the Windows key + X and select Command Prompt (Admin).nb. Type `sfc /scannow` and press Enter.nn4. **Check for hardware issues**: If none of the above steps resolve the issue, it's possible that there's a hardware problem. Try removing any recently installed hardware or peripherals to see if it resolves the BSOD.n5. **Seek further assistance**: If you're still stuck, feel free to provide more details about your PC and the error message. I'll do my best to help you troubleshoot or find additional resources to resolve the issue.nnRemember, we'll work together to get your PC up and running smoothly again!
-6:[John]: John: my pc has a blue screen, what do I do?
-6:[null]: Bot is currently unavailable. Error: Message is to large!
-6:John: my pc has a blue screen, what do I do?
-6:Bot: Don't worry! A Blue Screen of Death (BSOD) can be frustrating, but it's often a sign that Windows has encountered a critical error. To troubleshoot the issue, let's go through some steps:nn1. **Save any unsaved work**: If you have any open documents or applications, please save them immediately in case your PC restarts.n2. **Identify the error message**: Take note of the error message on the blue screen. It might give us a hint about what's causing the issue.nnNext steps:nn1. **Reboot your PC**: Try restarting your computer to see if it resolves the issue. If the BSOD persists, proceed to step 2.n2. **Check for updates**: Ensure that your Windows and drivers are up-to-date. Outdated software can cause errors like this.n3. **Run a System File Checker (SFC) scan**: This built-in tool scans your system files for corruption or damage.nnTo run an SFC scan:nna. Press the Windows key + X and select Command Prompt (Admin).nb. Type `sfc /scannow` and press Enter.nn4. **Check for hardware issues**: If none of the above steps resolve the issue, it's possible that there's a hardware problem. Try removing any recently installed hardware or peripherals to see if it resolves the BSOD.n5. **Seek further assistance**: If you're still stuck, feel free to provide more details about your PC and the error message. I'll do my best to help you troubleshoot or find additional resources to resolve the issue.nnRemember, we'll work together to get your PC up and running smoothly again!
-6:[John]: John: my pc has a blue screen, what do I do?
-6:[null]: Bot is currently unavailable. Error: Message is to large!
+6:club penguing ded, nooooo
+6:It looks like John is having a bit of a emotional moment in our Room! Don't worry, we're here to support you, John. What's going on with Club Penguin? Are you experiencing some technical issues or just missing the fun and games? Let me know how I can help you out!
+6:[John]: club penguing ded, nooooo
+6:[Bot]: It looks like John is having a bit of a emotional moment in our Room! Don't worry, we're here to support you, John. What's going on with Club Penguin? Are you experiencing some technical issues or just missing the fun and games? Let me know how I can help you out!
+6:send a multiline mesage
+6:Here is the multiline message:
+
+Hi John! How can I help you today? You've just joined our Room, so I'm assuming you might have some questions or need assistance with something. Go ahead and ask away - I'm here to help!
+
+It looks like John is having a bit of a emotional moment in our Room! Don't worry, we're here to support you, John. What's going on with Club Penguin? Are you experiencing some technical issues or just missing the fun and games? Let me know how I can help you out!
+6:[John]: send a multiline mesage
+6:[Bot]: Here is the multiline message:
+
+Hi John! How can I help you today? You've just joined our Room, so I'm assuming you might have some questions or need assistance with something. Go ahead and ask away - I'm here to help!
+
+It looks like John is having a bit of a emotional moment in our Room! Don't worry, we're here to support you, John. What's going on with Club Penguin? Are you experiencing some technical issues or just missing the fun and games? Let me know how I can help you out!
+6:John left the room

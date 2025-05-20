@@ -432,6 +432,9 @@ public class Server {
                 continue; 
             }
             authSocketLock.unlock();
+            if (username == null) {
+                username = "Bot";
+            }
             if(isInfoMessage){
                 //user is conneted/disconnected message
                 connection.sendMessage(username + message, out);
@@ -442,13 +445,13 @@ public class Server {
         }
 
         // Save message to room history if not info message or if info message is join/leave/reconnect
-        if (!isInfoMessage || (message.contains("joined the Room") || message.contains("left the room") || message.contains("reconnected to the room"))) {
+        if (!isInfoMessage) {
             conversationLock.lock();
             try {
                 List<String> conversation = roomConversations.computeIfAbsent(roomId, _ -> new ArrayList<>());
                 if(isInfoMessage){
                     conversation.add(username + message);
-                }else{
+                } else{
                     conversation.add("[" + username + "]: " + message);
                 }
             } finally {
@@ -571,10 +574,7 @@ public class Server {
                     userRoomLock.unlock();
                 }
 
-                ChatService.ChatRoomInfo roomInfo = ChatService.getAvailableChats().get(roomID);
-                if (roomInfo.isAIRoom) {
-                    handleAIRoomMessage(message, roomID, token);
-                } else {
+                
     
                 if(message.equals("exitRoom")){
                     //the user wants to exit the room. Send disconnect message
@@ -585,9 +585,14 @@ public class Server {
                     connection.sendMessage("You exited the room successfully. Press enter to continue", out);
                     continue;
                 }else{
-                    //normal message
-                    sendMessageToChat(message, roomID, token, false);
-                }
+
+                    ChatService.ChatRoomInfo roomInfo = ChatService.getAvailableChats().get(roomID);
+                    if (roomInfo.isAIRoom) {
+                        handleAIRoomMessage(message, roomID, token);
+                    } else {
+                        //normal message
+                        sendMessageToChat(message, roomID, token, false);
+                    }
                 }
             }
             else if(state == ClientState.CHATS_MENU){
@@ -760,7 +765,7 @@ public class Server {
         conversationLock.lock();
         try {
             String username = authUsers.get(token);
-            String formattedMessage = username + ": " + message;
+            String formattedMessage = message;
             List<String> conversation = roomConversations.computeIfAbsent(roomId, _ -> new ArrayList<>());
 
             ChatService.ChatRoomInfo roomInfo = ChatService.getAvailableChats().get(roomId);
@@ -772,15 +777,13 @@ public class Server {
                 }
             }
 
-            conversation.add(formattedMessage);
-
             ChatService.getAvailableChats().get(roomId);
 
             String initialPrompt = roomInfo.initialPrompt;
             
             String aiResponse = llmService.getAIResponse(message, conversation, initialPrompt);
             
-            String botMessage = "Bot: " + aiResponse;
+            String botMessage = aiResponse;
             conversation.add(botMessage);
             
             sendMessageToChat(formattedMessage, roomId, token, false);
