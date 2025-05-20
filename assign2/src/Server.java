@@ -88,6 +88,9 @@ public class Server {
 
     }
 
+    /*
+     * Initializes the main data structures, specially the ones related to the server socket
+     */
     public void start() throws IOException, NoSuchAlgorithmException, CertificateException, KeyStoreException, UnrecoverableKeyException, KeyManagementException{
             // Load KeyStore
             KeyStore ks = KeyStore.getInstance("JKS");
@@ -109,6 +112,9 @@ public class Server {
         System.out.println("The Server is now listening to the port " + this.port); 
     }
 
+    /*
+     * Runs the server and starts listening for new clients
+     */
     public void run() throws IOException{
         while (true){
             SSLSocket clientSocket = (SSLSocket) this.serverSocket.accept();
@@ -122,7 +128,10 @@ public class Server {
         }
     }
 
-
+    /*
+     * Handles and manages the authentication protocol. 
+     * Uses the auth service to verify the provided credentials
+     */
     private String authentication(BufferedReader in, PrintWriter out) throws Exception{
 
             String token = null;
@@ -174,6 +183,9 @@ public class Server {
         
     }
 
+    /*
+     * Sends the selection of available rooms that a user can join 
+     */
     private void sendRoomSelection(PrintWriter out) throws Exception{
         //add a flag for a multiline message
         connection.sendMessage(FLAG, out);
@@ -188,6 +200,11 @@ public class Server {
         connection.sendMessage(FLAG, out);
     }
 
+    /*
+     * Handles the selection of rooms by the user. 
+     * Inserts the user in the room if the provided is is valid. 
+     * Returns true if the operation was successfull or false otherwise.
+     */
     private boolean handleRoomSelection(PrintWriter out, String token, String selected ) throws Exception{
 
         Integer selectedInteger = -1;
@@ -242,6 +259,10 @@ public class Server {
         return true;
     }
 
+    /*
+     * Handles the creation of new rooms using a name provided by the user. 
+     * Inserts the new room in all the necessary data structures
+     */
     private void handleRoomCreation(BufferedReader in, PrintWriter out, String token) throws Exception{
         while(true){
             connection.sendMessage("Please enter the chat name:", out);
@@ -311,6 +332,10 @@ public class Server {
         }
     }
 
+    /*
+     * Handles the client choice when connecting to the server.
+     * Handles possible authentication or reconnection requests
+     */
     private ClientState handleClientChoice(BufferedReader in, PrintWriter out, String token, Socket clientSocket, ClientState state) throws Exception{
 
             //start the authentication process
@@ -417,6 +442,9 @@ public class Server {
             }
     }
 
+    /*
+     * Send a message to all the users that are connected to a specific room (room with id = roomID)
+     */
     private void sendMessageToChat(String message, Integer roomId, String token, boolean isInfoMessage) throws Exception{
 
         //username of the user that is sending the message
@@ -463,6 +491,11 @@ public class Server {
         }
     }
 
+    /*
+     * Verifies the if the token sent by the user is valid or if it is expired.
+     * If token is invalid, removed the user from the authenticated users list.
+     * Uses the auth service to help with the validation
+     */
     private boolean verifyToken(PrintWriter out, String token) throws Exception{
          // check if token is valid
             authUserslock.lock();
@@ -491,6 +524,10 @@ public class Server {
         return true;
     }
 
+    /*
+     * Refreshes the user token.
+     * Uses the auth service to do the refresh
+     */
     private void refreshToken(PrintWriter out, String token) throws Exception{
         authLock.lock();
             try{
@@ -503,6 +540,9 @@ public class Server {
             }
     }
 
+    /*
+     * Main function to handle new clients. Reads the responses from the client and makes an appropriated action
+     */
     private void handleClients(SSLSocket clientSocket) throws Exception{
         ClientState state = ClientState.RECONECT_MENU;//state of the client. Starts with the reconect menu
 
@@ -664,6 +704,9 @@ public class Server {
 
     }
 
+    /*
+     * Sends a disconnect message to all the users in a room when a user exists the room
+     */
     private void sendDisconnectMessage(String token) throws Exception{
         Integer roomID = -1;
         userRoomLock.lock();
@@ -684,6 +727,9 @@ public class Server {
         }
     }
 
+    /*
+     * Disconnects a user from a room. It can still connect to to other rooms
+     */
     private void disconnectUserFromRoom(String token) throws Exception{
         Integer roomId = null;
 
@@ -717,6 +763,9 @@ public class Server {
             }
     }
 
+    /*
+     * Disconnects the user entirely from the server. The user information is removed from all the datastructures of the server
+     */
     private void disconnectUser(String token) throws Exception{
         
             disconnectUserFromRoom(token);
@@ -771,7 +820,10 @@ public class Server {
         }
 
     }
-
+    
+    /*
+     * Handles messages in Ai rooms
+     */
     private void handleAIRoomMessage(String message, Integer roomId, String token) throws Exception {
         conversationLock.lock();
         try {

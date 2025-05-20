@@ -37,7 +37,10 @@ public class Client {
         System.out.println("Client started socket in address " + address + " and port " + port);
     }
 
-    
+    /*
+     * Handles the user inputs. 
+     * If the user does not respond for a predefined period of time, the method stops and an exception is thrown
+     */
     private boolean waitForUserInput(BufferedReader reader, StringBuilder target, long timeoutMillis) throws IOException {
         final ReentrantLock lock = new ReentrantLock();
         final Condition inputAvailable = lock.newCondition();
@@ -118,6 +121,10 @@ public class Client {
         }
     }
 
+    /*
+     * Handles the authentication protocol.
+     * Reads the inputs from the users and sends the reponses to the server
+     */
     private boolean handleAuthentication(BufferedReader in, BufferedReader userInput, PrintWriter out) throws Exception {
         while (true) {
             System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
@@ -166,6 +173,9 @@ public class Client {
         }
     }
 
+    /*
+     * Updates the token file with the new token information
+     */
     public static Boolean addTokenFile(String token, String name) throws Exception {
         StringBuilder fileContent = new StringBuilder();
         boolean replaced = false;
@@ -207,6 +217,9 @@ public class Client {
         }
     }
 
+    /*
+     * Removes the token from the file when the user exist the app
+     */
     public static Boolean removeTokenFromFile(String token) throws Exception{
         try (BufferedReader reader = new BufferedReader(new FileReader("tokens.txt"))) {
             String line;
@@ -232,7 +245,11 @@ public class Client {
         }
     }
 
-    public boolean handleUserChoice(String choice, BufferedReader in, BufferedReader userInput, PrintWriter out) throws Exception {
+    /*
+     * Handles the user choice after connecting with the server. 
+     * It handles possible reconnections or authentications
+     */
+    public void handleUserChoice(String choice, BufferedReader in, BufferedReader userInput, PrintWriter out) throws Exception {
 
             if (choice.toString().equals("1")) {
                     //authentication
@@ -283,6 +300,11 @@ public class Client {
             return true;
     }
 
+    /*
+     * Main method of the client app. 
+     * Handles the various steps of the connection.
+     * Uses one thread to read responses from the server and other thread (main thread) to write. 
+     */
     public void run() throws Exception {
         BufferedReader in = new BufferedReader(new InputStreamReader(this.clientSocket.getInputStream()));
         PrintWriter out = new PrintWriter(this.clientSocket.getOutputStream(), true);

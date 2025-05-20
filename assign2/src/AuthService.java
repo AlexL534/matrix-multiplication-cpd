@@ -20,7 +20,10 @@ public class AuthService {
 
     private static final long TOKEN_TIMEOUT = 30 * 60 * 1000; // timeout is 30 minutes
 
-
+    /*
+     * Handles the signin process. 
+     * Finds the user using the provided credentials and returns a token
+     */
     public static String signin(String username, String password) throws Exception{
         //returns the auth token
         String token = null;
@@ -62,6 +65,10 @@ public class AuthService {
         return token;
     } 
 
+    /*
+     * Handles the criation of a new account.
+     * Inserts the new user account into the file with the user credentials
+     */
     private static String signup(String username, String password) throws Exception{
         String token = null;
 
@@ -76,6 +83,9 @@ public class AuthService {
 
     }
 
+    /*
+     * Hashes the user passwords to improve the authentication security
+     */
     private static String hashPassword(String password) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
@@ -90,6 +100,9 @@ public class AuthService {
         }
     }
 
+    /*
+     * Generates tokens to be used to identify users in the server
+     */
     private static String generateSecureToken() {
         SecureRandom secureRandom = new SecureRandom();
         byte[] randomBytes = new byte[24]; 
@@ -97,6 +110,9 @@ public class AuthService {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
     }
 
+    /*
+     * Verifies the validity of a token
+     */
     public static boolean isTokenValid(String token) {
         tokensLock.lock();
         try {
@@ -116,6 +132,9 @@ public class AuthService {
 
     }
 
+    /*
+     * Replaces a token by a fresh one
+     */
     public static void refreshToken(String token) {
         tokensLock.lock();
         try {
