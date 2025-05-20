@@ -249,7 +249,7 @@ public class Client {
      * Handles the user choice after connecting with the server. 
      * It handles possible reconnections or authentications
      */
-    public void handleUserChoice(String choice, BufferedReader in, BufferedReader userInput, PrintWriter out) throws Exception {
+    public boolean handleUserChoice(String choice, BufferedReader in, BufferedReader userInput, PrintWriter out) throws Exception {
 
             if (choice.toString().equals("1")) {
                     //authentication
