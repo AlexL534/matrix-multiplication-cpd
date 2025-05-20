@@ -188,7 +188,7 @@ public class Server {
         connection.sendMessage(FLAG, out);
     }
 
-    private void handleRoomSelection(PrintWriter out, String token, String selected ) throws Exception{
+    private boolean handleRoomSelection(PrintWriter out, String token, String selected ) throws Exception{
 
         Integer selectedInteger = -1;
         try{
@@ -196,12 +196,12 @@ public class Server {
         }
         catch(NumberFormatException e){
             connection.sendMessage("Please send a number!", out);
-            return;
+            return false;
         }
 
         if(selectedInteger < 0 || selectedInteger > chatRooms.size()){
-            connection.sendMessage("Invalid ID: " + selectedInteger.toString() , out);
-            return;
+            connection.sendMessage("Invalid ID: " + selectedInteger.toString() + ". Please try again.", out);
+            return false;
         }
 
         connection.sendMessage("Room: " + chatRooms.get(selectedInteger), out);
@@ -239,6 +239,7 @@ public class Server {
         sendRoomHistory(out, selectedInteger);
 
         sendMessageToChat(" joined the Room", selectedInteger, token, true);
+        return true;
     }
 
     private void handleRoomCreation(BufferedReader in, PrintWriter out, String token) throws Exception{
@@ -613,12 +614,18 @@ public class Server {
                                 state = ClientState.CHATS_MENU;
                                 isSendRooms = true; //need to send the rooms again
                             }
+                            else{
+                                connection.sendMessage("Invalid Special option. Please try again.", out);
+                            }
 
                         }
                         else{
                             //no special option is possible. Handle normal room selection
-                            handleRoomSelection(out, token, message);
-                            state = ClientState.CHAT;
+                            boolean successful = handleRoomSelection(out, token, message);
+                            if(successful){
+                                state = ClientState.CHAT;
+                            }
+                            
                         }
                         
                         
