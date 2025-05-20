@@ -41,17 +41,8 @@ public class Server {
     //constructor
     public Server(int port) throws Exception{
         this.port = port;
-        //parse chat rooms included in a file
-        chatRooms = ChatService.getAvailableChats();
-        //initialize empty maps for runtime-only data
-        roomsUsers = new HashMap<>();
-        for(Integer id : chatRooms.keySet()){
-            roomsUsers.put(id, new ArrayList<>());
-        }
-        authUsers = new HashMap<>();
-        userRoom = new HashMap<>();
-        authSocket = new HashMap<>();
 
+        
         //initialize the locks
         authLock = new ReentrantLock();
         authUserslock = new ReentrantLock();
@@ -62,6 +53,23 @@ public class Server {
         chatServiceLock = new ReentrantLock();
 
         connection = new Connection();
+
+        authUsers = new HashMap<>();
+        userRoom = new HashMap<>();
+        authSocket = new HashMap<>();
+        roomsUsers = new HashMap<>();
+
+        //parse chat rooms included in a file
+        chatRoomsLock.lock();
+        try {
+            chatRooms = ChatService.getAvailableChats();
+            //initialize empty maps for runtime-only data
+            for(Integer id : chatRooms.keySet()){
+                roomsUsers.put(id, new ArrayList<>());
+            }
+        } finally {
+            chatRoomsLock.unlock();
+        }
 
         // Load database state (only persistent data is loaded)
         Database.load(authUsers, chatRooms, userRoom, roomsUsers, roomConversations, DB_FILE);
@@ -214,6 +222,13 @@ public class Server {
             String aiResponse = connection.readResponse(in);
             boolean isAIRoom = aiResponse != null && aiResponse.trim().split(":")[1].equalsIgnoreCase("yes");
 
+            String initialPrompt = "";
+            if (isAIRoom) {
+                connection.sendMessage("Enter the initial prompt for the AI room:", out);
+                String promptResponse = connection.readResponse(in);
+                initialPrompt = promptResponse != null ? promptResponse.trim().split(":")[1] : "";
+            }
+
             if(!verifyToken(out, token)){
                 //invalid token. Needs reauth
                 return;
@@ -225,7 +240,7 @@ public class Server {
             //create the chat and get its id
             chatServiceLock.lock();
             try{
-                isCreated = ChatService.createChat(chatName, isAIRoom);
+                isCreated = ChatService.createChat(chatName, isAIRoom, initialPrompt);
                 id = ChatService.getRoomIdByName(chatName);
             } catch(Exception e){
                 throw new Exception(e);
@@ -237,7 +252,7 @@ public class Server {
             //insert the new room into the chat rooms list
             chatRoomsLock.lock();
             try{
-                chatRooms.put(id, new ChatService.ChatRoomInfo(chatName, isAIRoom));
+                chatRooms.put(id, new ChatService.ChatRoomInfo(chatName, isAIRoom, initialPrompt));
             } catch(Exception e){
                 throw new Exception(e);
             }finally{
@@ -719,11 +734,23 @@ public class Server {
             String username = authUsers.get(token);
             String formattedMessage = username + ": " + message;
             List<String> conversation = roomConversations.computeIfAbsent(roomId, _ -> new ArrayList<>());
+
+            ChatService.ChatRoomInfo roomInfo = ChatService.getAvailableChats().get(roomId);
+
+            // if it's the first message in the conversation, add the initial prompt
+            if (conversation.isEmpty()) {
+                if (roomInfo.isAIRoom && !roomInfo.initialPrompt.isEmpty()) {
+                    conversation.add("System: " + roomInfo.initialPrompt);
+                }
+            }
+
             conversation.add(formattedMessage);
 
             ChatService.getAvailableChats().get(roomId);
+
+            String initialPrompt = roomInfo.initialPrompt;
             
-            String aiResponse = llmService.getAIResponse(message, conversation);
+            String aiResponse = llmService.getAIResponse(message, conversation, initialPrompt);
             
             String botMessage = "Bot: " + aiResponse;
             conversation.add(botMessage);

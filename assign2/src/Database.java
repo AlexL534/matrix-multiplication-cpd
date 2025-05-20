@@ -19,7 +19,8 @@ public class Database {
             chatRoomsLock.lock();
             try {
                 for (Map.Entry<Integer, ChatService.ChatRoomInfo> entry : chatRooms.entrySet()) {
-                    writer.println(entry.getKey() + ":" + entry.getValue().name + ":" + entry.getValue().isAIRoom);
+                    writer.println(entry.getKey() + ":" + entry.getValue().name + ":" + entry.getValue().isAIRoom  + ":" + 
+                            entry.getValue().initialPrompt.replace("\n", "\\n"));
                 }
             } finally { chatRoomsLock.unlock(); }
 
@@ -59,9 +60,20 @@ public class Database {
                 }
                 switch (section) {
                     case "[ROOMS]":
-                        String[] roomParts = line.split(":", 3);
-                        if (roomParts.length == 3)
-                            chatRooms.put(Integer.parseInt(roomParts[0]), new ChatService.ChatRoomInfo(roomParts[1], Boolean.parseBoolean(roomParts[2])));
+                        String[] roomParts = line.split(":", 4);
+                        if (roomParts.length >= 3) {
+                            int roomId = Integer.parseInt(roomParts[0]);
+                            String roomName = roomParts[1];
+                            boolean isAIRoom = Boolean.parseBoolean(roomParts[2]);
+                            String initialPrompt = roomParts.length > 3 ? roomParts[3] : ""; // Get prompt if exists
+                            
+                            // Create ChatRoomInfo with all parameters including initialPrompt
+                            chatRooms.put(roomId, new ChatService.ChatRoomInfo(
+                                roomName, 
+                                isAIRoom, 
+                                initialPrompt.replace("\\n", "\n") // Unescape newlines
+                            ));
+                        }
                         break;
                     case "[MESSAGES]":
                         int idx = line.indexOf(":");

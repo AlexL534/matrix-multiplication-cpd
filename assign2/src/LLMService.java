@@ -8,7 +8,7 @@ public class LLMService {
     private final ReentrantLock lock = new ReentrantLock();
     private String model = "llama3";
 
-    public String getAIResponse(String prompt, List<String> conversationHistory) throws IOException {
+    public String getAIResponse(String prompt, List<String> conversationHistory, String initialPrompt) throws IOException {
         lock.lock();
         try {
             if (!testConnection()) {
@@ -26,7 +26,7 @@ public class LLMService {
             String jsonInput = String.format(
                 "{\"model\":\"%s\",\"prompt\":\"%s\",\"stream\":false}",
                 model,
-                escapeJson(buildFullPrompt(prompt, conversationHistory))
+                escapeJson(buildFullPrompt(prompt, conversationHistory, initialPrompt))
             );
             
             HttpURLConnection connection = (HttpURLConnection) new URL(OLLAMA_URL).openConnection();
@@ -140,14 +140,26 @@ public class LLMService {
         }
     }
 
-    private String buildFullPrompt(String prompt, List<String> conversationHistory) {
+    private String buildFullPrompt(String prompt, List<String> conversationHistory, String initialPrompt) {
         StringBuilder fullPrompt = new StringBuilder(prompt);
+
+        if (initialPrompt != null && !initialPrompt.isEmpty()) {
+            fullPrompt.append(initialPrompt).append("\n\n");
+        } else {
+            // default prompt if none is specified
+            fullPrompt.append("You are a helpful chat assistant. Respond naturally and conversationally.\n\n");
+        }
+
         if (!conversationHistory.isEmpty()) {
             fullPrompt.append("\n\nContext:");
             for (String msg : conversationHistory) {
-                fullPrompt.append("\n").append(msg);
+                fullPrompt.append(msg).append("\n");
             }
         }
+
+        fullPrompt.append("\nUser: ").append(prompt);
+        fullPrompt.append("\nAssistant:");
+
         return fullPrompt.toString();
     }
 }

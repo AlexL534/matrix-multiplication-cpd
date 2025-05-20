@@ -11,8 +11,8 @@ import java.util.concurrent.locks.Condition;
 
 public class Client {
 
-    private long timeoutAfk = 60 * 1000; // Afk Timeout to avoid slow clients
-    private long timeoutServer = 60 * 1000; // Max await time for server response
+    private long timeoutAfk = 120 * 1000; // Afk Timeout to avoid slow clients
+    private long timeoutServer = 120 * 1000; // Max await time for server response
     private int port;
     private String address;
     private String authToken; //Similar to jwt token. The client service doesn't need to know the real user information

@@ -14,9 +14,9 @@ public class Connection {
         return in.readLine();
     }
 
-    public void sendMessage(String message, PrintWriter out) throws Exception{
+    public void sendMessage(String message, PrintWriter out) throws Exception{  
         if(message.length() > 1024){
-            throw new Exception("Message is to large!");
+            throw new Exception("Message is too large!");
         }
         out.println(message);
     }

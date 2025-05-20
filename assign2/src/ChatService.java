@@ -15,10 +15,16 @@ public class ChatService {
     public static class ChatRoomInfo {
         public final String name;
         public final boolean isAIRoom;
+        public final String initialPrompt;
 
         public ChatRoomInfo(String name, boolean isAIRoom) {
+            this(name, isAIRoom, "");
+        }
+
+            public ChatRoomInfo(String name, boolean isAIRoom, String initialPrompt) {
             this.name = name;
             this.isAIRoom = isAIRoom;
+            this.initialPrompt = initialPrompt != null ? initialPrompt : "";
         }
 
         @Override
@@ -51,23 +57,26 @@ public class ChatService {
         try (BufferedReader reader = new BufferedReader(new FileReader("chats.txt"))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                String[] parts = line.split(":");
-                if (parts.length != 3) {
+                String[] parts = line.split(":", 4);
+                if (parts.length < 3) {
                     throw new IllegalArgumentException("Invalid room format: " + line);
                 }
                 int id = Integer.parseInt(parts[0]);
                 String name = parts[1];
                 boolean isAI = Boolean.parseBoolean(parts[2]);
-                chatRooms.put(id, new ChatRoomInfo(name, isAI));
+                String initialPrompt = parts.length > 3 ? parts[3] : "";
+                chatRooms.put(id, new ChatRoomInfo(name, isAI, initialPrompt));
             }
         }
     }
 
+    // not being used anywhere at the moment
     private static void saveRoomsToFile() {
         try (PrintWriter writer = new PrintWriter(new FileWriter("chats.txt"))) {
             for (Map.Entry<Integer, ChatRoomInfo> entry : chatRooms.entrySet()) {
                 
-                writer.println(entry.getKey() + ":" + entry.getValue().name + ":" + entry.getValue().isAIRoom);
+                writer.println(entry.getKey() + ":" + entry.getValue().name + ":" + entry.getValue().isAIRoom + ":" + 
+                entry.getValue().initialPrompt);
             }
         } catch (IOException e) {
             System.err.println("Failed to save chat rooms: " + e.getMessage());
@@ -96,13 +105,13 @@ public class ChatService {
         return id;
     }
 
-    public static Boolean createChat(String name, boolean isAIRoom) throws Exception{
+    public static Boolean createChat(String name, boolean isAIRoom, String initialPrompt) throws Exception{
         int newID = 0;
         try (BufferedReader reader = new BufferedReader(new FileReader("chats.txt"))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                String[] chatInfo = line.split(":");
-                if(chatInfo.length != 3){
+                String[] chatInfo = line.split(":", 4);
+                if(chatInfo.length < 3){
                     throw new Error("Something wrong happened when parsing the chat file!");
                 }
                 if(chatInfo[1].equals(name)){
@@ -118,14 +127,14 @@ public class ChatService {
             throw new Exception(e.getMessage());
         }
 
-        // Always write 3 fields: id:name:isAIRoom
         try(PrintWriter writer = new PrintWriter(new FileWriter("chats.txt", true), true)){
-            writer.println(newID + ":" + name + ":" + isAIRoom);
+            writer.println(newID + ":" + name + ":" + isAIRoom  + ":" + 
+            (initialPrompt != null ? initialPrompt : ""));
         } catch (IOException e) {
             throw new Exception(e.getMessage()); 
         }
 
-        chatRooms.put(newID, new ChatRoomInfo(name, isAIRoom));
+        chatRooms.put(newID, new ChatRoomInfo(name, isAIRoom, initialPrompt));
 
         return true;
     }
