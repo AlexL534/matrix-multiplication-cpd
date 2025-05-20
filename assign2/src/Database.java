@@ -14,12 +14,40 @@ public class Database {
     ) {
         try (PrintWriter writer = new PrintWriter(new FileWriter(filename))) {
 
+            // USERS
+            writer.println("[USERS]");
+            authUsersLock.lock();
+            try {
+                for (Map.Entry<String, String> entry : authUsers.entrySet()) {
+                    writer.println(entry.getKey() + ":" + entry.getValue());
+                }
+            } finally { authUsersLock.unlock(); }
+
+            // USER_ROOM
+            writer.println("\n[USER_ROOM]");
+            userRoomLock.lock();
+            try {
+                for (Map.Entry<String, Integer> entry : userRoom.entrySet()) {
+                    writer.println(entry.getKey() + ":" + entry.getValue());
+                }
+            } finally { userRoomLock.unlock(); }
+
+            // ROOMS_USERS
+            writer.println("\n[ROOMS_USERS]");
+            roomsUsersLock.lock();
+            try {
+                for (Map.Entry<Integer, List<String>> entry : roomsUsers.entrySet()) {
+                    writer.print(entry.getKey() + ":");
+                    writer.println(String.join(",", entry.getValue()));
+                }
+            } finally { roomsUsersLock.unlock(); }
+
             // ROOMS
-            writer.println("[ROOMS]");
+            writer.println("\n[ROOMS]");
             chatRoomsLock.lock();
             try {
                 for (Map.Entry<Integer, ChatService.ChatRoomInfo> entry : chatRooms.entrySet()) {
-                    writer.println(entry.getKey() + ":" + entry.getValue().name + ":" + entry.getValue().isAIRoom  + ":" + 
+                    writer.println(entry.getKey() + ":" + entry.getValue().name + ":" + entry.getValue().isAIRoom  + ":" +
                             entry.getValue().initialPrompt.replace("\n", "\\n"));
                 }
             } finally { chatRoomsLock.unlock(); }
@@ -59,19 +87,43 @@ public class Database {
                     continue;
                 }
                 switch (section) {
+                    case "[USERS]":
+                        String[] userParts = line.split(":", 2);
+                        if (userParts.length == 2) {
+                            AuthService.refreshToken(userParts[0]);
+                            authUsers.put(userParts[0], userParts[1]);
+                        }
+                        break;
+                    case "[USER_ROOM]":
+                        String[] urParts = line.split(":", 2);
+                        if (urParts.length == 2) {
+                            userRoom.put(urParts[0], Integer.parseInt(urParts[1]));
+                        }
+                        break;
+                    case "[ROOMS_USERS]":
+                        String[] ruParts = line.split(":", 2);
+                        if (ruParts.length == 2) {
+                            int roomId = Integer.parseInt(ruParts[0]);
+                            List<String> users = new ArrayList<>();
+                            if (!ruParts[1].isEmpty()) {
+                                for (String token : ruParts[1].split(",")) {
+                                    users.add(token);
+                                }
+                            }
+                            roomsUsers.put(roomId, users);
+                        }
+                        break;
                     case "[ROOMS]":
                         String[] roomParts = line.split(":", 4);
                         if (roomParts.length >= 3) {
                             int roomId = Integer.parseInt(roomParts[0]);
                             String roomName = roomParts[1];
                             boolean isAIRoom = Boolean.parseBoolean(roomParts[2]);
-                            String initialPrompt = roomParts.length > 3 ? roomParts[3] : ""; // Get prompt if exists
-                            
-                            // Create ChatRoomInfo with all parameters including initialPrompt
+                            String initialPrompt = roomParts.length > 3 ? roomParts[3] : "";
                             chatRooms.put(roomId, new ChatService.ChatRoomInfo(
-                                roomName, 
-                                isAIRoom, 
-                                initialPrompt.replace("\\n", "\n") // Unescape newlines
+                                roomName,
+                                isAIRoom,
+                                initialPrompt.replace("\\n", "\n")
                             ));
                         }
                         break;

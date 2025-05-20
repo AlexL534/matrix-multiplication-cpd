@@ -86,12 +86,6 @@ public class Server {
         // Load database state (only persistent data is loaded)
         Database.load(authUsers, chatRooms, userRoom, roomsUsers, roomConversations, DB_FILE);
 
-
-        authUsers.clear();
-        userRoom.clear();
-        for (List<String> users : roomsUsers.values()) {
-            users.clear();
-        }
     }
 
     public void start() throws IOException, NoSuchAlgorithmException, CertificateException, KeyStoreException, UnrecoverableKeyException, KeyManagementException{
@@ -524,7 +518,11 @@ public class Server {
         try {
             if (state == ClientState.RECONECT_MENU) {
                 state = handleClientChoice(in, out, token,clientSocket, state);
+                if (state == ClientState.EXIT) {
+                    return;
+                }
             }
+            
         }
         catch (Exception e){
             System.out.println(e.getMessage() + "\n" + "Client Disconnected.");

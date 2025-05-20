@@ -232,7 +232,7 @@ public class Client {
         }
     }
 
-    public void handleUserChoice(String choice, BufferedReader in, BufferedReader userInput, PrintWriter out) throws Exception {
+    public boolean handleUserChoice(String choice, BufferedReader in, BufferedReader userInput, PrintWriter out) throws Exception {
 
             if (choice.toString().equals("1")) {
                     //authentication
@@ -247,13 +247,18 @@ public class Client {
                     StringBuilder token = new StringBuilder();
                     if (!waitForUserInput(userInput, token, timeoutAfk)) {
                         System.out.println("Disconnected: Timed out waiting for token.");
-                        return;
+                        return false;
                     }
                     connection.sendMessage(token.toString(), out);
                     this.authToken = token.toString();
 
-                    System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
-                    
+                    String message = connection.readResponseWithTimeout(in, timeoutServer);
+                    System.out.println(message);
+                    if (message.trim().equals("Token not found")) {
+                        clientSocket.close();
+                        return false;
+                    }
+
                     String isInRoom = connection.readResponseWithTimeout(in, timeoutServer);
 
                     if (isInRoom.equals("true")){
@@ -264,7 +269,7 @@ public class Client {
                     //exit
                     clientSocket.close();
                     System.out.println("Disconnecting...");
-                    return;
+                    return false;
             }
 
             if (!choice.toString().equals("2")) {
@@ -275,6 +280,7 @@ public class Client {
                 System.out.println("    - When some special input is asked, please use the provided instructions.");
                 System.out.println("Press Enter to continue (if needed).\n");
             }
+            return true;
     }
 
     public void run() throws Exception {
@@ -304,7 +310,10 @@ public class Client {
 
             connection.sendMessage(choice.toString(), out);
 
-            handleUserChoice(choice.toString(), in, userInput, out);
+            if (!handleUserChoice(choice.toString(), in, userInput, out)) {
+                clientSocket.close();
+                return;
+            }
 
             //thread that handles message reception
             Thread.ofVirtual().start(() -> {
