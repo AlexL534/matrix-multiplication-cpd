@@ -7,7 +7,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class Connection {
     private final String FLAG = "::";
-    private long timeoutServer = 60 * 1000; // Max await time for server response
+    private long timeoutServer = 120 * 1000; // Max await time for server response
 
 
     public String readResponse(BufferedReader in) throws IOException{

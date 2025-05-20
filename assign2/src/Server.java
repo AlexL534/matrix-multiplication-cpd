@@ -404,6 +404,9 @@ public class Server {
                 continue; 
             }
             authSocketLock.unlock();
+            if (username == null) {
+                username = "Bot";
+            }
             if(isInfoMessage){
                 //user is conneted/disconnected message
                 connection.sendMessage(username + message, out);
@@ -543,10 +546,7 @@ public class Server {
                     userRoomLock.unlock();
                 }
 
-                ChatService.ChatRoomInfo roomInfo = ChatService.getAvailableChats().get(roomID);
-                if (roomInfo.isAIRoom) {
-                    handleAIRoomMessage(message, roomID, token);
-                } else {
+                
     
                 if(message.equals("exitRoom")){
                     //the user wants to exit the room. Send disconnect message
@@ -557,9 +557,14 @@ public class Server {
                     connection.sendMessage("You exited the room successfully. Press enter to continue", out);
                     continue;
                 }else{
-                    //normal message
-                    sendMessageToChat(message, roomID, token, false);
-                }
+
+                    ChatService.ChatRoomInfo roomInfo = ChatService.getAvailableChats().get(roomID);
+                    if (roomInfo.isAIRoom) {
+                        handleAIRoomMessage(message, roomID, token);
+                    } else {
+                        //normal message
+                        sendMessageToChat(message, roomID, token, false);
+                    }
                 }
             }
             else if(state == ClientState.CHATS_MENU){
@@ -732,7 +737,7 @@ public class Server {
         conversationLock.lock();
         try {
             String username = authUsers.get(token);
-            String formattedMessage = username + ": " + message;
+            String formattedMessage = message;
             List<String> conversation = roomConversations.computeIfAbsent(roomId, _ -> new ArrayList<>());
 
             ChatService.ChatRoomInfo roomInfo = ChatService.getAvailableChats().get(roomId);
@@ -752,7 +757,7 @@ public class Server {
             
             String aiResponse = llmService.getAIResponse(message, conversation, initialPrompt);
             
-            String botMessage = "Bot: " + aiResponse;
+            String botMessage = aiResponse;
             conversation.add(botMessage);
             
             sendMessageToChat(formattedMessage, roomId, token, false);
