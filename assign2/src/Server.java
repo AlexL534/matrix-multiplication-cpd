@@ -1,14 +1,26 @@
 import java.io.BufferedReader;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.net.ServerSocket;
 import java.net.Socket;
+import java.security.KeyManagementException;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
+
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLServerSocket;
+import javax.net.ssl.SSLServerSocketFactory;
+import javax.net.ssl.SSLSocket;
 
 public class Server {
 
@@ -18,7 +30,7 @@ public class Server {
     private Map<String, PrintWriter> authSocket; //key = user token, value =  socket to connect with the authenticated user
     private Map<Integer, List<String>> roomsUsers;  //key= room id, value = list of user(token) in the room
     private Map<String, Integer> userRoom; //key = user token, value = room id. Indicates the room where the user is now
-    private ServerSocket serverSocket;
+    private SSLServerSocket serverSocket;
     private final String FLAG = "::";
     private final LLMService llmService = new LLMService();
     private final Map<Integer, List<String>> roomConversations = new HashMap<>();
@@ -82,14 +94,30 @@ public class Server {
         }
     }
 
-    public void start() throws IOException{
-        this.serverSocket = new ServerSocket(this.port);
+    public void start() throws IOException, NoSuchAlgorithmException, CertificateException, KeyStoreException, UnrecoverableKeyException, KeyManagementException{
+            // Load KeyStore
+            KeyStore ks = KeyStore.getInstance("JKS");
+            FileInputStream fis = new FileInputStream("keystore.jks");
+            ks.load(fis, "password".toCharArray());
+            fis.close();
+
+            // Initialize KeyManagerFactory
+            KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
+            kmf.init(ks, "password".toCharArray());
+
+            // Initialize SSLContext
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(kmf.getKeyManagers(), null, null);
+
+            // Create SSLServerSocket
+            SSLServerSocketFactory ssf = sslContext.getServerSocketFactory();
+            this.serverSocket = (SSLServerSocket) ssf.createServerSocket(port);
         System.out.println("The Server is now listening to the port " + this.port); 
     }
 
     public void run() throws IOException{
         while (true){
-            Socket clientSocket = this.serverSocket.accept();
+            SSLSocket clientSocket = (SSLSocket) this.serverSocket.accept();
             Thread.ofVirtual().start(() -> {
                 try {
                     this.handleClients(clientSocket);
@@ -471,7 +499,7 @@ public class Server {
             }
     }
 
-    private void handleClients(Socket clientSocket) throws Exception{
+    private void handleClients(SSLSocket clientSocket) throws Exception{
         ClientState state = ClientState.RECONECT_MENU;//state of the client. Starts with the reconect menu
 
 

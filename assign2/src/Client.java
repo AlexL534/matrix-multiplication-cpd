@@ -4,9 +4,12 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.concurrent.locks.ReentrantLock;
+
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
+
 import java.util.concurrent.locks.Condition;
 
 public class Client {
@@ -16,7 +19,7 @@ public class Client {
     private int port;
     private String address;
     private String authToken; //Similar to jwt token. The client service doesn't need to know the real user information
-    private Socket clientSocket;
+    private SSLSocket clientSocket;
     private Connection connection;
 
     public Client(int port, String address){
@@ -26,7 +29,11 @@ public class Client {
     }
 
     public void start() throws UnknownHostException, IOException{
-        this.clientSocket = new Socket(address, port);
+        System.setProperty("javax.net.ssl.trustStore", "clientTruststore.jks");
+        System.setProperty("javax.net.ssl.trustStorePassword", "password");
+        SSLSocketFactory factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
+        this.clientSocket = (SSLSocket) factory.createSocket(address, port);
+
         System.out.println("Client started socket in address " + address + " and port " + port);
     }
 

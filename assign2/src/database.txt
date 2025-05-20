@@ -7,6 +7,28 @@
 6:Tech Support:true:You are a helpful tech support assistant. Answer technical questions clearly and concisely.
 
 [MESSAGES]
+1:lucas joined the Room
+1:[lucas]: Boas gamers!
+1:lucas left the room
+1:lucas joined the Room
+1:lucas reconnected to the room
+1:lucas joined the Room
+1:[lucas]: Boas pessoal do chat!
+1:teste joined the Room
+1:[teste]: Ent�o Lucas
+1:[lucas]: Boas senhor teste. Como est�?
+1:[teste]: Bora jogar!
+1:lucas left the room
+1:teste left the room
+1:lucas joined the Room
+1:[lucas]: boas
+1:lucas left the room
+2:lucas joined the Room
+2:[lucas]: boas
+2:teste joined the Room
+2:[teste]: boas
+2:lucas left the room
+2:teste left the room
 6:John joined the Room
 6:John: what are you?
 6:Bot: I'm happy to help! I'm your friendly Tech Support Assistant, here to provide assistance with any technical questions or issues you might have. I'll do my best to answer your questions clearly and concisely, so feel free to ask me anything!
