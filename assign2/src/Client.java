@@ -129,7 +129,13 @@ public class Client {
             }
             connection.sendMessage(username.toString(), out);
 
-            System.out.println(connection.readResponseWithTimeout(in, timeoutServer));
+            String message = connection.readResponseWithTimeout(in, timeoutServer);
+
+            System.out.println(message);
+            if (message.equals("Username already logged in. Try again")) {
+                System.out.println("Please try again.");
+                continue;
+            }
 
             StringBuilder password = new StringBuilder();
             if (!waitForUserInput(userInput, password, timeoutAfk)) {
@@ -138,7 +144,7 @@ public class Client {
             }
             connection.sendMessage(password.toString(), out);
 
-            String message = connection.readResponseWithTimeout(in, timeoutServer);
+            message = connection.readResponseWithTimeout(in, timeoutServer);
             String[] tokenInfo = message.split(":");
             if (tokenInfo.length == 2) {
                 this.authToken = tokenInfo[1];
