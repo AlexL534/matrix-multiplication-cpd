@@ -1,19 +1,15 @@
 [USERS]
-CnDdtwkPxNibKDdwnhpOm9W7-kYwhpcE:John
-E8o-pjUmK8A6iupLds4q3-MLru9sUNlB:try
 
 [USER_ROOM]
-CnDdtwkPxNibKDdwnhpOm9W7-kYwhpcE:7
-E8o-pjUmK8A6iupLds4q3-MLru9sUNlB:1
 
 [ROOMS_USERS]
-1:E8o-pjUmK8A6iupLds4q3-MLru9sUNlB
+1:
 2:
 3:
 4:
 5:
 6:
-7:CnDdtwkPxNibKDdwnhpOm9W7-kYwhpcE
+7:
 
 [ROOMS]
 1:Gamers:false:
@@ -27,6 +23,11 @@ E8o-pjUmK8A6iupLds4q3-MLru9sUNlB:1
 [MESSAGES]
 1:[try]: oi
 1:[try]: boas
+1:[try]: hello
+4:[try]: boas
+6:[try]: my phone broke
+6:Sorry to hear that your phone has broken! Can you tell me more about what happened? For example, did it fall, get wet, or stop working suddenly? And are there any error messages or lights flashing on the screen?
+6:[Bot]: Sorry to hear that your phone has broken! Can you tell me more about what happened? For example, did it fall, get wet, or stop working suddenly? And are there any error messages or lights flashing on the screen?
 7:System: you will only speak in italian, with short answers
 7:[John]: hello my friend
 7:Ciao amico!
@@ -44,3 +45,21 @@ E8o-pjUmK8A6iupLds4q3-MLru9sUNlB:1
 7:[Bot]: Calma!
 7:[John]: tu gostas de pica?
 7:[Bot]: Sì!
+7:[John]: pica no cu?
+7:Mamma mia!
+7:[Bot]: Mamma mia!
+7:[John]: do you know tralalero tralala?
+7:Sì! Tralalero tralala!
+7:[Bot]: Sì! Tralalero tralala!
+7:[John]: then tell me about him
+7:Era un uomo fantastico! Lui amava la vita, il cibo e le donne. Era sempre pronto a ridere e a cantare. Sapeva fare i piatti migliori della città. Era un vero gentiluomo.
+7:[Bot]: Era un uomo fantastico! Lui amava la vita, il cibo e le donne. Era sempre pronto a ridere e a cantare. Sapeva fare i piatti migliori della città. Era un vero gentiluomo.
+7:[John]: he is a shark with shoes
+7:Ahah! È un mostro!
+7:[Bot]: Ahah! È un mostro!
+7:[John]: do you like him?
+7:Sì, mi piace molto!
+7:[Bot]: Sì, mi piace molto!
+7:[John]: what about his eyes?
+7:Erano splendidi!
+7:[Bot]: Erano splendidi!

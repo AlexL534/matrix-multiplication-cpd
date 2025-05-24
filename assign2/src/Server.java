@@ -40,8 +40,6 @@ public class Server {
     private Map<Integer, Boolean> roomWaitingForAIResponse = new HashMap<>();             // room ID -> whether it's waiting for AI response
     private Map<Integer, List<String>> roomConversations = new HashMap<>();               // room ID -> conversation history
 
-    private volatile boolean aiProcessorRunning = false;
-
     private Connection connection;
 
     // Authentication data structures
@@ -377,8 +375,13 @@ public class Server {
 
                 connection.sendMessage("Reconnected: " + authUsers.get(token), out);
 
-                authSocket.remove(token);
-                authSocket.put(token, out);
+                authSocketLock.lock();
+                try {
+                    authSocket.remove(token);
+                    authSocket.put(token, out);
+                } finally {
+                    authSocketLock.unlock();
+                }
 
                 // Save DB after reconnect
                 saveDatabase();
@@ -827,104 +830,145 @@ public class Server {
      */
     private void handleAIRoomMessage(String message, Integer roomId, String token) throws Exception {
         // check if there's already a pending AI response for this room
-        aiResponseLock.lock();
-        try {
-            if (roomWaitingForAIResponse.getOrDefault(roomId, false)) {
-                authSocketLock.lock();
-                try {
-                    PrintWriter out = authSocket.get(token);
-                    if (out != null) {
-                        out.println("Please wait for the assistant's current response before sending another message");
-                    }
-                } finally {
-                    authSocketLock.unlock();
-                }
-                return;
-            }
-            roomWaitingForAIResponse.put(roomId, true);
-        } finally {
-            aiResponseLock.unlock();
+        if (checkPendingResponse(roomId, token)) {
+            return;
         }
 
         // process in virtual thread
         Thread.ofVirtual().start(() -> {
             try {
-                String username;
-                authUserslock.lock();
-                try {
-                    username = authUsers.get(token);
-                } finally {
-                    authUserslock.unlock();
-                }
+                String username = getUsername(token);
+                ChatService.ChatRoomInfo roomInfo = getRoomInfo(roomId);
 
-                ChatService.ChatRoomInfo roomInfo;
-                chatRoomsLock.lock();
-                try {
-                    roomInfo = chatRooms.get(roomId);
-                } finally {
-                    chatRoomsLock.unlock();
-                }
+                // send user message
+                sendMessageToChat(message, roomId, token, false);
 
-                // process message and obtain AI response
-                conversationLock.lock();
-                try {
-                    List<String> conversation = roomConversations.computeIfAbsent(roomId, _ -> new ArrayList<>());
-                    
-                    // add initial prompt if the conversation is empty
-                    if (conversation.isEmpty() && roomInfo.isAIRoom && !roomInfo.initialPrompt.isEmpty()) {
-                        conversation.add("System: " + roomInfo.initialPrompt);
-                    }
+                // get AI response
+                String aiResponse = processAIResponse(message, token, roomId, roomInfo);
 
-                    // send user message
-                    sendMessageToChat(message, roomId, token, false);
+                // send AI response
+                sendMessageToChat(aiResponse, roomId, "BOT_TOKEN", false);
 
-                    // obtain ai response
-                    String aiResponse = processAIResponse(message, roomId, roomInfo);
-                    
-                    // send ai response
-                    sendMessageToChat(aiResponse, roomId, "BOT_TOKEN", false);
+                saveDatabase();
 
-                    saveDatabase();
-                } finally {
-                    conversationLock.unlock();
-                }
             } catch (Exception e) {
-                System.err.println("LLM Error: " + e.getMessage());
-                try {
-                    sendMessageToChat("Bot is currently unavailable. Error: " + e.getMessage(), 
-                                    roomId, "SYSTEM", false);
-                } catch (Exception ex) {
-                    System.err.println("Error sending error message: " + ex.getMessage());
-                }
+                handleAIError(e, roomId);
             } finally {
                 // allow the room to accept new messages
-                aiResponseLock.lock();
-                try {
-                    roomWaitingForAIResponse.put(roomId, false);
-                } finally {
-                    aiResponseLock.unlock();
-                }
+                markRoomAvailable(roomId);
             }
         });
     }
 
-    private String processAIResponse(String message, Integer roomId, ChatService.ChatRoomInfo roomInfo) {
+    private boolean checkPendingResponse(Integer roomId, String token) {
+        aiResponseLock.lock();
+        try {
+            if (roomWaitingForAIResponse.getOrDefault(roomId, false)) {
+                sendPendingResponseMessage(token);
+                return true;
+            }
+            roomWaitingForAIResponse.put(roomId, true);
+            return false;
+        } finally {
+            aiResponseLock.unlock();
+        }
+    }
+
+    private void sendPendingResponseMessage(String token) {
+        authSocketLock.lock();
+        try {
+            PrintWriter out = authSocket.get(token);
+            if (out != null) {
+                out.println("Please wait for the assistant's current response before sending another message");
+            }
+        } finally {
+            authSocketLock.unlock();
+        }
+    }
+
+    private String getUsername(String token) {
+        authUserslock.lock();
+        try {
+            return authUsers.get(token);
+        } finally {
+            authUserslock.unlock();
+        }
+    }
+
+    private ChatService.ChatRoomInfo getRoomInfo(Integer roomId) {
+        chatRoomsLock.lock();
+        try {
+            return chatRooms.get(roomId);
+        } finally {
+            chatRoomsLock.unlock();
+        }
+    }
+
+    private void handleAIError(Exception e, Integer roomId) {
+        System.err.println("LLM Error: " + e.getMessage());
+        try {
+            sendMessageToChat("Bot is currently unavailable. Error: " + e.getMessage(), 
+                            roomId, "SYSTEM", false);
+        } catch (Exception ex) {
+            System.err.println("Error sending error message: " + ex.getMessage());
+        }
+    }
+
+    private void markRoomAvailable(Integer roomId) {
+        aiResponseLock.lock();
+        try {
+            roomWaitingForAIResponse.put(roomId, false);
+        } finally {
+            aiResponseLock.unlock();
+        }
+    }
+
+    private String processAIResponse(String message, String token, Integer roomId, ChatService.ChatRoomInfo roomInfo) {
+        List<String> conversation = getConversationSnapshot(roomId, roomInfo);
+
+        try {
+            String response = llmService.getAIResponse(message, conversation, roomInfo.initialPrompt);
+            
+            updateConversationHistory(roomId, token, message, response, roomInfo);
+            
+            return response;
+        } catch (IOException e) {
+            return "Bot is currently unavailable. Error: " + e.getMessage();
+        }
+    }  
+
+    private List<String> getConversationSnapshot(Integer roomId, ChatService.ChatRoomInfo roomInfo) {
         conversationLock.lock();
         try {
-            List<String> conversation = roomConversations.computeIfAbsent(roomId, _ -> new ArrayList<>());
+            List<String> conversation = new ArrayList<>(
+                roomConversations.computeIfAbsent(roomId, _ -> new ArrayList<>())
+            );
+            
             if (conversation.isEmpty() && roomInfo.isAIRoom && !roomInfo.initialPrompt.isEmpty()) {
                 conversation.add("System: " + roomInfo.initialPrompt);
             }
-            try {
-                return llmService.getAIResponse(message, conversation, roomInfo.initialPrompt);
-            } catch (IOException e) {
-                e.printStackTrace();
-                return "Bot is currently unavailable. Error: " + e.getMessage();
-            }
+            
+            return conversation;
         } finally {
             conversationLock.unlock();
         }
-    }  
+    }
+
+    private void updateConversationHistory(Integer roomId, String token, String message, String response, ChatService.ChatRoomInfo roomInfo) {
+        conversationLock.lock();
+        try {
+            List<String> conversation = roomConversations.computeIfAbsent(roomId, _ -> new ArrayList<>());
+            
+            String userEntry = "[" + authUsers.get(token) + "]: " + message;
+            if (!conversation.contains(userEntry)) {
+                conversation.add(userEntry);
+            }
+            
+            conversation.add(response);
+        } finally {
+            conversationLock.unlock();
+        }
+    }
     
     // Save the database state
     private void saveDatabase() {
