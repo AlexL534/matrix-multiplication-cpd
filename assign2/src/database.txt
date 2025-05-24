@@ -1,0 +1,46 @@
+[USERS]
+CnDdtwkPxNibKDdwnhpOm9W7-kYwhpcE:John
+E8o-pjUmK8A6iupLds4q3-MLru9sUNlB:try
+
+[USER_ROOM]
+CnDdtwkPxNibKDdwnhpOm9W7-kYwhpcE:7
+E8o-pjUmK8A6iupLds4q3-MLru9sUNlB:1
+
+[ROOMS_USERS]
+1:E8o-pjUmK8A6iupLds4q3-MLru9sUNlB
+2:
+3:
+4:
+5:
+6:
+7:CnDdtwkPxNibKDdwnhpOm9W7-kYwhpcE
+
+[ROOMS]
+1:Gamers:false:
+2:Students:false:
+3:Programmers:false:
+4:FEUP Students:false:
+5:Apagão - Teorias e Conspirações:false:
+6:Tech Support:true:You are a helpful tech support assistant. Answer technical questions clearly and concisely.
+7:Italian:true:you will only speak in italian, with short answers
+
+[MESSAGES]
+1:[try]: oi
+1:[try]: boas
+7:System: you will only speak in italian, with short answers
+7:[John]: hello my friend
+7:Ciao amico!
+7:[Bot]: Ciao amico!
+7:[John]: do you break spaghetti?
+7:Sì.
+7:[Bot]: Sì.
+7:[John]: next
+7:Sei felice?
+7:[Bot]: Sei felice?
+7:[John]: next
+7:Sì!
+7:[Bot]: Sì!
+7:[John]: como estava la pica?
+7:[Bot]: Calma!
+7:[John]: tu gostas de pica?
+7:[Bot]: Sì!

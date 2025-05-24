@@ -25,51 +25,47 @@ import javax.net.ssl.SSLSocket;
 public class Server {
 
     private int port;
-    private Map<Integer, ChatService.ChatRoomInfo> chatRooms; //key = chat ID, value = chat name
-    private Map<String, String> authUsers; //key = user token, value = username
-    private Map<String, PrintWriter> authSocket; //key = user token, value =  socket to connect with the authenticated user
-    private Map<Integer, List<String>> roomsUsers;  //key= room id, value = list of user(token) in the room
-    private Map<String, Integer> userRoom; //key = user token, value = room id. Indicates the room where the user is now
     private SSLServerSocket serverSocket;
     private final String FLAG = "::";
-    private final LLMService llmService = new LLMService();
-    private final Map<Integer, List<String>> roomConversations = new HashMap<>();
-    private final ReentrantLock conversationLock = new ReentrantLock();
+    private final String DB_FILE = "database.txt";
 
-    //Locks
-    ReentrantLock authLock;         //Used when accessing the authentication service
-    ReentrantLock authUserslock;    //Used when accessing the authUser map
-    ReentrantLock chatRoomsLock;    //Used when accessing the chatRoom map
-    ReentrantLock userRoomLock;    //Used when accessing the userRoom map
-    ReentrantLock roomsUsersLock;  //Used when accessing the rooms user map
-    ReentrantLock authSocketLock;  //Used when accessing the auth socket map
-    ReentrantLock chatServiceLock; //Used when accessing the chat service to create and fetch chats rooms
+    // llmservice
+    private final LLMService llmService = new LLMService();
+
+
+    // Chat room data structures
+    private Map<Integer, ChatService.ChatRoomInfo> chatRooms = new HashMap<>();           // key = chat ID, value = chat info
+    private Map<Integer, List<String>> roomsUsers = new HashMap<>();                      // room ID -> list of user tokens in the room
+    private Map<String, Integer> userRoom = new HashMap<>();                              // user token -> room ID (indicates the room where the user is)
+    private Map<Integer, Boolean> roomWaitingForAIResponse = new HashMap<>();             // room ID -> whether it's waiting for AI response
+    private Map<Integer, List<String>> roomConversations = new HashMap<>();               // room ID -> conversation history
+
+    private volatile boolean aiProcessorRunning = false;
 
     private Connection connection;
 
-    // Database file name
-    private static final String DB_FILE = "database.txt";
+    // Authentication data structures
+    private Map<String, String> authUsers  = new HashMap<>();         // user token -> username
+    private Map<String, PrintWriter> authSocket  = new HashMap<>();   // user token -> socket to connect with the authenticated user
+
+
+    //Locks
+    private final ReentrantLock authLock = new ReentrantLock();;       // Auth service
+    private final ReentrantLock authUserslock = new ReentrantLock();   // authUsers map
+    private final ReentrantLock chatRoomsLock = new ReentrantLock();   // chatRooms map
+    private final ReentrantLock userRoomLock = new ReentrantLock();    // userRoom map
+    private final ReentrantLock roomsUsersLock = new ReentrantLock();  // roomsUsers map
+    private final ReentrantLock authSocketLock = new ReentrantLock();  // authSocket map
+    private final ReentrantLock chatServiceLock = new ReentrantLock(); // chat service
+    private final ReentrantLock aiResponseLock = new ReentrantLock();  // roomConversations map
+    private final ReentrantLock conversationLock = new ReentrantLock();// AI response wait
+
+
 
     //constructor
     public Server(int port) throws Exception{
         this.port = port;
-
-        
-        //initialize the locks
-        authLock = new ReentrantLock();
-        authUserslock = new ReentrantLock();
-        chatRoomsLock = new ReentrantLock();
-        userRoomLock = new ReentrantLock();
-        roomsUsersLock = new ReentrantLock();
-        authSocketLock = new ReentrantLock();
-        chatServiceLock = new ReentrantLock();
-
-        connection = new Connection();
-
-        authUsers = new HashMap<>();
-        userRoom = new HashMap<>();
-        authSocket = new HashMap<>();
-        roomsUsers = new HashMap<>();
+        this.connection = new Connection();
 
         //parse chat rooms included in a file
         chatRoomsLock.lock();
@@ -446,43 +442,40 @@ public class Server {
      * Send a message to all the users that are connected to a specific room (room with id = roomID)
      */
     private void sendMessageToChat(String message, Integer roomId, String token, boolean isInfoMessage) throws Exception{
-
-        //username of the user that is sending the message
+        String username;
         authUserslock.lock();
-        String username = authUsers.get(token);
-        authUserslock.unlock();
+        try {
+            username = authUsers.get(token);
+        } finally {
+            authUserslock.unlock();
+        }
+
+        if (username == null) username = "Bot";
+
+        String formattedMessage = isInfoMessage ? username + message : "[" + username + "]: " + message;
 
         //send message to all the users in the chat
         for(String userToken : roomsUsers.get(roomId)){
+            PrintWriter out;
             authSocketLock.lock();
-            
-            PrintWriter out = authSocket.get(userToken);
-            if(out == null){
-                continue; 
+            try {
+                out = authSocket.get(userToken);
+            } finally {
+                authSocketLock.unlock();
             }
-            authSocketLock.unlock();
-            if (username == null) {
-                username = "Bot";
+
+            if (out != null) {
+                connection.sendMessage(formattedMessage, out);
             }
-            if(isInfoMessage){
-                //user is conneted/disconnected message
-                connection.sendMessage(username + message, out);
-            }else{
-                connection.sendMessage("[" + username + "]: " + message, out);
-            }
-           
         }
 
         // Save message to room history if not info message or if info message is join/leave/reconnect
         if (!isInfoMessage) {
+            String historyEntry = isInfoMessage ? username + message : "[" + username + "]: " + message;
             conversationLock.lock();
             try {
                 List<String> conversation = roomConversations.computeIfAbsent(roomId, _ -> new ArrayList<>());
-                if(isInfoMessage){
-                    conversation.add(username + message);
-                } else{
-                    conversation.add("[" + username + "]: " + message);
-                }
+                conversation.add(historyEntry);
             } finally {
                 conversationLock.unlock();
             }
@@ -629,7 +622,7 @@ public class Server {
                     isSendRooms = true;
                     connection.sendMessage("You exited the room successfully. Press enter to continue", out);
                     continue;
-                }else{
+                } else{
 
                     ChatService.ChatRoomInfo roomInfo = ChatService.getAvailableChats().get(roomID);
                     if (roomInfo.isAIRoom) {
@@ -798,7 +791,8 @@ public class Server {
             saveDatabase();
     }
 
-    public static void main(String args[]){
+    public static void main(String args[]) {
+        int port = 8080;
         System.out.println("Starting server .....");
 
         if(args.length != 1){
@@ -809,7 +803,14 @@ public class Server {
         }
 
         //parse the arguments
-        int port = Integer.parseInt(args[0]);
+        if (args.length > 0) {
+            try {
+                port = Integer.parseInt(args[0]);
+            } catch (NumberFormatException e) {
+                System.out.println("Expected a number for port but got: " + args[0]);
+                System.exit(1);
+            }
+        }
 
         try{
             Server server = new Server(port);
@@ -822,46 +823,109 @@ public class Server {
     }
     
     /*
-     * Handles messages in Ai rooms
+     * Handles messages in AI rooms
      */
     private void handleAIRoomMessage(String message, Integer roomId, String token) throws Exception {
-        conversationLock.lock();
+        // check if there's already a pending AI response for this room
+        aiResponseLock.lock();
         try {
-            String username = authUsers.get(token);
-            String formattedMessage = message;
-            List<String> conversation = roomConversations.computeIfAbsent(roomId, _ -> new ArrayList<>());
+            if (roomWaitingForAIResponse.getOrDefault(roomId, false)) {
+                authSocketLock.lock();
+                try {
+                    PrintWriter out = authSocket.get(token);
+                    if (out != null) {
+                        out.println("Please wait for the assistant's current response before sending another message");
+                    }
+                } finally {
+                    authSocketLock.unlock();
+                }
+                return;
+            }
+            roomWaitingForAIResponse.put(roomId, true);
+        } finally {
+            aiResponseLock.unlock();
+        }
 
-            ChatService.ChatRoomInfo roomInfo = ChatService.getAvailableChats().get(roomId);
+        // process in virtual thread
+        Thread.ofVirtual().start(() -> {
+            try {
+                String username;
+                authUserslock.lock();
+                try {
+                    username = authUsers.get(token);
+                } finally {
+                    authUserslock.unlock();
+                }
 
-            // if it's the first message in the conversation, add the initial prompt
-            if (conversation.isEmpty()) {
-                if (roomInfo.isAIRoom && !roomInfo.initialPrompt.isEmpty()) {
-                    conversation.add("System: " + roomInfo.initialPrompt);
+                ChatService.ChatRoomInfo roomInfo;
+                chatRoomsLock.lock();
+                try {
+                    roomInfo = chatRooms.get(roomId);
+                } finally {
+                    chatRoomsLock.unlock();
+                }
+
+                // process message and obtain AI response
+                conversationLock.lock();
+                try {
+                    List<String> conversation = roomConversations.computeIfAbsent(roomId, _ -> new ArrayList<>());
+                    
+                    // add initial prompt if the conversation is empty
+                    if (conversation.isEmpty() && roomInfo.isAIRoom && !roomInfo.initialPrompt.isEmpty()) {
+                        conversation.add("System: " + roomInfo.initialPrompt);
+                    }
+
+                    // send user message
+                    sendMessageToChat(message, roomId, token, false);
+
+                    // obtain ai response
+                    String aiResponse = processAIResponse(message, roomId, roomInfo);
+                    
+                    // send ai response
+                    sendMessageToChat(aiResponse, roomId, "BOT_TOKEN", false);
+
+                    saveDatabase();
+                } finally {
+                    conversationLock.unlock();
+                }
+            } catch (Exception e) {
+                System.err.println("LLM Error: " + e.getMessage());
+                try {
+                    sendMessageToChat("Bot is currently unavailable. Error: " + e.getMessage(), 
+                                    roomId, "SYSTEM", false);
+                } catch (Exception ex) {
+                    System.err.println("Error sending error message: " + ex.getMessage());
+                }
+            } finally {
+                // allow the room to accept new messages
+                aiResponseLock.lock();
+                try {
+                    roomWaitingForAIResponse.put(roomId, false);
+                } finally {
+                    aiResponseLock.unlock();
                 }
             }
+        });
+    }
 
-            ChatService.getAvailableChats().get(roomId);
-
-            String initialPrompt = roomInfo.initialPrompt;
-            
-            String aiResponse = llmService.getAIResponse(message, conversation, initialPrompt);
-            
-            String botMessage = aiResponse;
-            conversation.add(botMessage);
-            
-            sendMessageToChat(formattedMessage, roomId, token, false);
-            sendMessageToChat(botMessage, roomId, "BOT_TOKEN", false);
-
-            // Save DB after AI message
-            saveDatabase();
-        } catch (Exception e) {
-            System.err.println("LLM Error: " + e.getMessage());
-            sendMessageToChat("Bot is currently unavailable. Error: " + e.getMessage(), roomId, "SYSTEM", false);
+    private String processAIResponse(String message, Integer roomId, ChatService.ChatRoomInfo roomInfo) {
+        conversationLock.lock();
+        try {
+            List<String> conversation = roomConversations.computeIfAbsent(roomId, _ -> new ArrayList<>());
+            if (conversation.isEmpty() && roomInfo.isAIRoom && !roomInfo.initialPrompt.isEmpty()) {
+                conversation.add("System: " + roomInfo.initialPrompt);
+            }
+            try {
+                return llmService.getAIResponse(message, conversation, roomInfo.initialPrompt);
+            } catch (IOException e) {
+                e.printStackTrace();
+                return "Bot is currently unavailable. Error: " + e.getMessage();
+            }
         } finally {
             conversationLock.unlock();
         }
-    }
-
+    }  
+    
     // Save the database state
     private void saveDatabase() {
         Database.save(

@@ -1,76 +1,69 @@
 import java.io.*;
 import java.net.*;
 import java.util.*;
-import java.util.concurrent.locks.*;
 
 public class LLMService {
     private static final String OLLAMA_URL = "http://localhost:11434/api/generate";
-    private final ReentrantLock lock = new ReentrantLock();
     private String model = "llama3";
         private static final int MAX_HISTORY_LENGTH = 4000;
         private static final int MAX_READ_TIMEOUT = 120000; // 2 minutes
 
 
     public String getAIResponse(String prompt, List<String> conversationHistory, String initialPrompt) throws IOException {
-        lock.lock();
-        try {
-            if (!testConnection()) {
-                throw new IOException("Cannot connect to Ollama server");
-            }
+        if (!testConnection()) {
+            throw new IOException("Cannot connect to Ollama server");
+        }
 
-            List<String> limitedHistory = limitHistorySize(conversationHistory);
+        List<String> limitedHistory = limitHistorySize(conversationHistory);
 
-            String jsonInput = String.format(
-                "{\"model\":\"%s\",\"prompt\":\"%s\",\"stream\":false}",
-                model,
-                escapeJson(buildFullPrompt(prompt, conversationHistory, initialPrompt))
-            );
-            
-            HttpURLConnection connection = (HttpURLConnection) new URL(OLLAMA_URL).openConnection();
-            connection.setRequestMethod("POST");
-            connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
-            connection.setRequestProperty("Accept", "application/json");
-            connection.setConnectTimeout(10000); // 10 secs
-            connection.setReadTimeout(MAX_READ_TIMEOUT);  
-            connection.setDoOutput(true);
+        String jsonInput = String.format(
+            "{\"model\":\"%s\",\"prompt\":\"%s\",\"stream\":false}",
+            model,
+            escapeJson(buildFullPrompt(prompt, conversationHistory, initialPrompt))
+        );
+        
+        HttpURLConnection connection = (HttpURLConnection) new URL(OLLAMA_URL).openConnection();
+        connection.setRequestMethod("POST");
+        connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+        connection.setRequestProperty("Accept", "application/json");
+        connection.setConnectTimeout(10000); // 10 secs
+        connection.setReadTimeout(MAX_READ_TIMEOUT);  
+        connection.setDoOutput(true);
 
-            try (OutputStream os = connection.getOutputStream();
-                 OutputStreamWriter writer = new OutputStreamWriter(os, "UTF-8")) {
-                writer.write(jsonInput);
-                writer.flush();
-            }
+        try (OutputStream os = connection.getOutputStream();
+                OutputStreamWriter writer = new OutputStreamWriter(os, "UTF-8")) {
+            writer.write(jsonInput);
+            writer.flush();
+        }
 
-            int responseCode = connection.getResponseCode();
-            System.out.println("Ollama response code: " + responseCode);
-            
-            if (responseCode != 200) {
-                StringBuilder errorResponse = new StringBuilder();
-                try (BufferedReader err = new BufferedReader(
-                    new InputStreamReader(connection.getErrorStream()))) {
-                    String errorLine;
-                    while ((errorLine = err.readLine()) != null) {
-                        errorResponse.append(errorLine);
-                    }
+        int responseCode = connection.getResponseCode();
+        System.out.println("Ollama response code: " + responseCode);
+        
+        if (responseCode != 200) {
+            StringBuilder errorResponse = new StringBuilder();
+            try (BufferedReader err = new BufferedReader(
+                new InputStreamReader(connection.getErrorStream()))) {
+                String errorLine;
+                while ((errorLine = err.readLine()) != null) {
+                    errorResponse.append(errorLine);
                 }
-                System.err.println("Full error response: " + errorResponse.toString());
-                throw new IOException("HTTP error: " + responseCode + " - " + errorResponse.toString());
             }
+            System.err.println("Full error response: " + errorResponse.toString());
+            throw new IOException("HTTP error: " + responseCode + " - " + errorResponse.toString());
+        }
 
-            try (BufferedReader in = new BufferedReader(
-                new InputStreamReader(connection.getInputStream()))) {
-                StringBuilder response = new StringBuilder();
-                String line;
-                while ((line = in.readLine()) != null) {
-                    response.append(line);
-                }
-                return parseAIResponse(response.toString());
+        try (BufferedReader in = new BufferedReader(
+            new InputStreamReader(connection.getInputStream()))) {
+            StringBuilder response = new StringBuilder();
+            String line;
+            while ((line = in.readLine()) != null) {
+                response.append(line);
             }
-        } finally {
-            lock.unlock();
+            return parseAIResponse(response.toString());
         }
     }
 
-        private List<String> limitHistorySize(List<String> conversationHistory) {
+    private List<String> limitHistorySize(List<String> conversationHistory) {
         if (conversationHistory == null || conversationHistory.isEmpty()) {
             return new ArrayList<>();
         }
@@ -184,6 +177,12 @@ public class LLMService {
 
         fullPrompt.append("\nUser: ").append(prompt);
         fullPrompt.append("\nAssistant:");
+
+        String fullPromptStr = fullPrompt.toString();
+        if (fullPromptStr.length() > MAX_HISTORY_LENGTH) {
+            fullPromptStr = fullPromptStr.substring(fullPromptStr.length() - MAX_HISTORY_LENGTH);
+            
+        }
 
         return fullPrompt.toString();
     }

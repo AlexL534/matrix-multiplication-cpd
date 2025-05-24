@@ -31,27 +31,27 @@ public class AuthService {
             String line;
 
             while ((line = reader.readLine()) != null) {
-               String[] credentials = line.split(":");
-               if(credentials.length != 2){
+                String[] credentials = line.split(":");
+                if(credentials.length != 2){
                     throw new Error("Something wrong happened when parsing the auth file!");
-               }
-               if(!credentials[0].trim().equals(username)){
+                }
+                if(!credentials[0].trim().equals(username)){
                     //User does not match
                     continue;
-               }
-               if(!hashPassword(password).equals(credentials[1].trim())){
+                }
+                if(!hashPassword(password).equals(credentials[1].trim())){
                     // passwords don't match
                     return null;
-               }
-               token = generateSecureToken();
-               tokensLock.lock();
-               try {
-                activeTokens.put(token, System.currentTimeMillis() + TOKEN_TIMEOUT); // set expiration time for the token
-               }
-               finally {
-                tokensLock.unlock();
-               }
-               break;
+                }
+                token = generateSecureToken();
+                tokensLock.lock();
+                try {
+                    activeTokens.put(token, System.currentTimeMillis() + TOKEN_TIMEOUT); // set expiration time for the token
+                }
+                finally {
+                    tokensLock.unlock();
+                }
+                break;
             }
 
             if(token == null){
