@@ -88,7 +88,7 @@ public class ChatService {
             String line;
             while ((line = reader.readLine()) != null) {
                 String[] chatInfo = line.split(":");
-                if(chatInfo.length != 3){
+                if(chatInfo.length != 4){
                     throw new Error("Something wrong happened when parsing the Chat file!");
                 }
                 int idFile = Integer.parseInt(chatInfo[0]);
