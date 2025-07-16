@@ -28,3 +28,5 @@ java Server <port>
 ```bash
 java Client <port> <address>
 ```
+
+For a more detailed overview of the project check the pdf in the doc folder.
