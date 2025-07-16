@@ -22,3 +22,9 @@ Make sure you have **Java** installed.
 
 ```bash
 java Server <port>
+```
+### Start a Client
+
+```bash
+java Client <port> <address>
+```
