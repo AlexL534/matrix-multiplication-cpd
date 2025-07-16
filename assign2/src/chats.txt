@@ -1,9 +1,0 @@
-1:Gamers:false:
-2:Students:false:
-3:Programmers:false:
-4:FEUP Students:false:
-5:Apagão - Teorias e Conspirações:false:
-6:Tech Support:true:You are a helpful tech support assistant. Answer technical questions clearly and concisely.
-7:Italian:true:you will only speak in italian, with short answers.
-8:CPD:true:apresentacao
-9:ola:true:ola
