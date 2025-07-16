@@ -41,7 +41,7 @@ g++ -O2 -fopenmp matrix_mult.cpp -o matrix_mult
 - `parallel1` - Coarse-grained parallel  
 - `parallel2` - Fine-grained parallel  
 
-For full results and analysis, see the report in `doc/report.pdf`.
+For full results and analysis, see the pdf report in `assign1/doc`.
 
 Group members:
 
